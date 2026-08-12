@@ -1,0 +1,31 @@
+{
+  "name": "ssc-customer-portal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SSC Customer Portal — C-suite customer-facing dashboard prototype",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "verify:data": "tsx scripts/verify-data.ts"
+  },
+  "dependencies": {
+    "next": "15.5.23",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.13",
+    "@types/node": "22.15.3",
+    "@types/react": "19.1.9",
+    "@types/react-dom": "19.1.7",
+    "tailwindcss": "4.1.13",
+    "tsx": "^4.20.6",
+    "typescript": "5.8.3"
+  },
+  "allowScripts": {
+    "@tailwindcss/oxide@4.1.13": true,
+    "esbuild@0.25.12": true
+  }
+}
