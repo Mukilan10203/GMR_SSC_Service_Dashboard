@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePortalData } from "@/components/portal/usePortalData";
-import { PageHeader } from "@/components/portal/blocks";
+import { LockedPage, PageHeader } from "@/components/portal/blocks";
 import {
   Badge,
   Card,
@@ -21,6 +21,10 @@ import type { AnalyticsProduct } from "@/lib/domain/types";
 import { cx, formatMetric, formatMoney, formatNumber, formatPercent } from "@/lib/format";
 
 export default function AnalyticsPage() {
+  return <LockedPage title="Analytics" />;
+}
+
+function AnalyticsPageUnlocked() {
   const { snapshot } = usePortalData();
   const [selected, setSelected] = useState<string | null>(null);
 

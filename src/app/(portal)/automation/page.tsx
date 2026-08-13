@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePortalData } from "@/components/portal/usePortalData";
-import { PageHeader } from "@/components/portal/blocks";
+import { LockedPage, PageHeader } from "@/components/portal/blocks";
 import {
   Badge,
   Card,
@@ -31,6 +31,10 @@ const STATUS_META: Record<BotStatus, { label: string; tone: "good" | "warn" | "b
 };
 
 export default function AutomationPage() {
+  return <LockedPage title="Automation" />;
+}
+
+function AutomationPageUnlocked() {
   const { snapshot } = usePortalData();
   const [filter, setFilter] = useState<"all" | BotStatus>("all");
 

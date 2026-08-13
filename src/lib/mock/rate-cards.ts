@@ -12,7 +12,7 @@ import type { ServiceId } from "../domain/types";
  * hardcoded downstream, so the numbers cannot drift apart.
  *
  * `baseVolume` / `baseFte` are stated for the flagship entity (DIAL, scale
- * 1.00) in the current reporting month (Nov of FY 2026). Other entities and
+ * 1.00) in the current reporting month (Aug of FY 2027). Other entities and
  * months are derived by multiplying through `scale`, `seasonality` and
  * `fteRamp`.
  *
@@ -51,7 +51,7 @@ export interface ServiceBlueprint {
   serviceId: ServiceId;
   txn: TxnLineSpec[];
   fte: FteLineSpec[];
-  /** 12 fiscal months, Apr→Mar. Index 7 (Nov) is normalised to 1.000. */
+  /** 12 fiscal months, Apr→Mar. Index 4 (Aug) is normalised to 1.000. */
   seasonality: number[];
   fteRamp: number[];
   /** FY actual-vs-budget variance target, in %. Positive = over budget. */
@@ -151,10 +151,11 @@ export const BLUEPRINTS: Record<ServiceId, ServiceBlueprint> = {
       { id: "fna-fte-treasury", role: "Treasury Operations", baseFte: 2, ratePerFte: 150_000 },
     ],
     // Steady growth with a visible October dip and a March year-end spike.
-    seasonality: [0.842, 0.858, 0.877, 0.869, 0.901, 0.933, 0.918, 1.0, 1.014, 1.037, 1.055, 1.134],
-    // A three-FTE uplift lands on 1 November. Together with the invoice
-    // volume recovery it gives the November bill a genuine, explainable jump.
-    fteRamp: [0.83, 0.83, 0.87, 0.87, 0.87, 0.87, 0.87, 1.0, 1.0, 1.0, 1.04, 1.04],
+    seasonality: [0.935, 0.952, 0.973, 0.964, 1, 1.036, 1.019, 1.11, 1.125, 1.151, 1.171, 1.259],
+    // A three-FTE uplift lands on 1 August — the current reporting month.
+    // Together with the invoice volume recovery it gives the August bill a
+    // genuine, explainable jump for the billing-drivers narrative.
+    fteRamp: [0.83, 0.83, 0.87, 0.87, 1.0, 1.0, 1.0, 1.0, 1.0, 1.04, 1.04, 1.04],
     budgetVariancePct: 3.4,
     stocks: [
       { id: "openExceptions", base: 215 },
@@ -211,15 +212,6 @@ export const BLUEPRINTS: Record<ServiceId, ServiceBlueprint> = {
         sourceSystem: "SAP SuccessFactors",
       },
       {
-        id: "hrops-core",
-        label: "Employee lifecycle & helpdesk cases",
-        unit: "case",
-        unitPlural: "cases",
-        baseVolume: 2_058,
-        rate: 45,
-        sourceSystem: "SAP SuccessFactors",
-      },
-      {
         id: "hrops-botlic",
         label: "Digital workforce runtime licences",
         unit: "bot",
@@ -245,7 +237,7 @@ export const BLUEPRINTS: Record<ServiceId, ServiceBlueprint> = {
       { id: "hrops-fte-sf", role: "SAP SuccessFactors Support", baseFte: 1, ratePerFte: 135_000 },
     ],
     // Hiring peaks Jun–Aug, softens over the December/January holidays.
-    seasonality: [0.912, 0.968, 1.045, 1.088, 1.062, 1.021, 0.974, 1.0, 0.936, 0.905, 0.958, 1.014],
+    seasonality: [0.859, 0.911, 0.984, 1.024, 1, 0.961, 0.917, 0.942, 0.881, 0.852, 0.902, 0.955],
     fteRamp: [0.9, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.9, 0.9, 1.0, 1.0],
     budgetVariancePct: -2.6,
     stocks: [
@@ -335,7 +327,7 @@ export const BLUEPRINTS: Record<ServiceId, ServiceBlueprint> = {
       { id: "proc-fte-vendor", role: "Vendor Master & Helpdesk", baseFte: 2, ratePerFte: 95_000 },
     ],
     // Budget release lifts Q1, and a pre-year-end contracting push lifts March.
-    seasonality: [0.938, 1.021, 1.076, 1.048, 0.982, 1.058, 0.966, 1.0, 1.032, 0.958, 1.016, 1.184],
+    seasonality: [0.955, 1.04, 1.096, 1.067, 1, 1.077, 0.984, 1.018, 1.051, 0.976, 1.035, 1.206],
     fteRamp: [0.9, 0.9, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.05, 1.05],
     budgetVariancePct: 2.2,
     stocks: [
@@ -428,7 +420,7 @@ export const BLUEPRINTS: Record<ServiceId, ServiceBlueprint> = {
     ],
     fte: [{ id: "idt-fte-spec", role: "Indirect Tax Specialist", baseFte: 3, ratePerFte: 155_000 }],
     // GST filing calendar: Sep annual return, Jan and Mar reconciliation pushes.
-    seasonality: [0.918, 0.946, 0.982, 1.044, 0.962, 1.218, 1.076, 1.0, 0.938, 1.124, 0.968, 1.162],
+    seasonality: [0.954, 0.983, 1.021, 1.085, 1, 1.266, 1.119, 1.04, 0.975, 1.168, 1.006, 1.208],
     fteRamp: [0.95, 0.95, 0.95, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.05, 1.05, 1.1],
     budgetVariancePct: 1.1,
     stocks: [
@@ -518,7 +510,7 @@ export const BLUEPRINTS: Record<ServiceId, ServiceBlueprint> = {
     ],
     fte: [{ id: "dt-fte-spec", role: "Direct Tax Specialist", baseFte: 2, ratePerFte: 165_000 }],
     // Quarterly TDS statements plus advance tax instalments in Jun, Sep, Dec, Mar.
-    seasonality: [0.884, 0.942, 1.138, 0.924, 0.958, 1.176, 0.942, 1.0, 1.164, 0.982, 0.948, 1.262],
+    seasonality: [0.923, 0.983, 1.188, 0.965, 1, 1.228, 0.983, 1.044, 1.215, 1.025, 0.99, 1.317],
     fteRamp: [0.95, 0.95, 0.95, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.05, 1.05, 1.1],
     budgetVariancePct: 0.8,
     stocks: [
@@ -558,10 +550,9 @@ export const SLA_COMPONENTS: Record<
     { id: "fna-sla-treasury", label: "Treasury payment runs & bank reconciliation", weight: 0.12, actual: 97.6, target: 96 },
   ],
   hrops: [
-    { id: "hrops-sla-payroll", label: "Payroll processed on time", weight: 0.45, actual: 99.1, target: 99 },
+    { id: "hrops-sla-payroll", label: "Payroll processed on time", weight: 0.6, actual: 99.1, target: 99 },
     { id: "hrops-sla-ta", label: "Talent acquisition within stage TAT", weight: 0.15, actual: 60.0, target: 90 },
-    { id: "hrops-sla-lnd", label: "Learning programmes delivered to calendar", weight: 0.15, actual: 94.6, target: 95 },
-    { id: "hrops-sla-core", label: "Employee lifecycle & helpdesk resolution", weight: 0.25, actual: 96.4, target: 95 },
+    { id: "hrops-sla-lnd", label: "Learning programmes delivered to calendar", weight: 0.25, actual: 94.6, target: 95 },
   ],
   procurement: [
     { id: "proc-sla-po", label: "Requisition to purchase order within TAT", weight: 0.3, actual: 96.4, target: 95 },
@@ -595,7 +586,6 @@ export const SLA_OVERRIDES: Record<string, Partial<Record<ServiceId, Record<stri
       "hrops-sla-payroll": 92.0,
       "hrops-sla-ta": 38.0,
       "hrops-sla-lnd": 74.0,
-      "hrops-sla-core": 80.0,
     },
   },
   "goa-mopa": {

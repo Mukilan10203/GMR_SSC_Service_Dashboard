@@ -260,6 +260,25 @@ export function ServiceCard({ service }: { service: ServiceSnapshot }) {
   );
 }
 
+/** Full-page lock screen for capabilities not yet available in this preview. */
+export function LockedPage({ title }: { title: string }) {
+  return (
+    <div className="mx-auto max-w-[720px] py-24 text-center">
+      <span className="mx-auto mb-5 flex size-12 items-center justify-center rounded-full bg-neutral-soft text-ink-3">
+        <IconLock size={22} />
+      </span>
+      <h1 className="text-[20px] font-semibold text-ink">{title} is locked</h1>
+      <p className="mt-2 text-[13.5px] text-ink-3">Not yet available in this preview.</p>
+      <Link
+        href="/overview"
+        className="mt-6 inline-block rounded-lg bg-rail px-4 py-2.5 text-[13px] font-medium text-white"
+      >
+        Back to overview
+      </Link>
+    </div>
+  );
+}
+
 /** A contracted tower not yet wired up in this build — shown, not hidden. */
 export function LockedServiceCard({ service }: { service: ServiceDefinition }) {
   return (

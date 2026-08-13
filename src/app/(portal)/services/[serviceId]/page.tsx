@@ -11,6 +11,8 @@ import {
   ChargingModel,
   CompletionCard,
   KpiGroupSection,
+  KpiOverviewPanel,
+  SubServiceExplorer,
   SlaBreakdown,
   UtilisationCard,
 } from "@/components/portal/service-blocks";
@@ -22,14 +24,13 @@ import {
   ProgressBar,
   SectionHeading,
   ServiceGlyph,
-  SourceTag,
   StatusPill,
   StatTile,
   TrendPill,
   serviceColor,
 } from "@/components/ui/primitives";
-import { ColumnChart } from "@/components/charts";
-import type { Issue, ServiceId } from "@/lib/domain/types";
+import { BulletGauge, ColumnChart } from "@/components/charts";
+import type { Issue, ServiceId, ServiceSnapshot } from "@/lib/domain/types";
 import { LOCKED_SERVICE_IDS } from "@/lib/mock/organisation";
 import { cx, formatMoney, formatNumber, formatPercent } from "@/lib/format";
 
@@ -93,17 +94,16 @@ function ServiceDetail() {
   const feedback = snapshot.feedback.filter((f) => f.serviceId === def.id);
   const serviceBots = (snapshot.automation?.bots ?? []).filter((b) => b.serviceId === def.id);
 
-  /** KPIs bucketed by subfunction, "Overall" (the aggregate SLA KPI) first, then in first-seen order. */
+  /** KPIs bucketed by sub-service in catalogue order; the aggregate SLA KPI leads as "Overall". */
   const kpiGroups: [string, typeof service.kpis][] = (() => {
-    const overall = service.kpis.filter((k) => !k.group);
-    const rest = new Map<string, typeof service.kpis>();
-    for (const k of service.kpis) {
-      if (!k.group) continue;
-      if (!rest.has(k.group)) rest.set(k.group, []);
-      rest.get(k.group)!.push(k);
-    }
-    const groups: [string, typeof service.kpis][] = [...rest.entries()];
-    return overall.length > 0 ? [["Overall", overall], ...groups] : groups;
+    const overall = service.kpis.filter((k) => !k.subServiceId);
+    const bySub: [string, typeof service.kpis][] = def.subServices
+      .map((sub): [string, typeof service.kpis] => [
+        sub.name,
+        service.kpis.filter((k) => k.subServiceId === sub.id),
+      ])
+      .filter(([, kpis]) => kpis.length > 0);
+    return overall.length > 0 ? [["Overall", overall], ...bySub] : bySub;
   })();
 
   /** Each sub-service joined to the SLA component that measures it. */
@@ -168,14 +168,6 @@ function ServiceDetail() {
               <p className="eyebrow">Open items</p>
               <p className="mt-1 text-[15px] font-semibold text-ink tnum">{openIssues.length}</p>
             </div>
-            <div className="flex flex-col gap-1">
-              <p className="eyebrow">Fed by</p>
-              <div className="flex flex-wrap gap-x-3 gap-y-1">
-                {def.sourceSystems.map((s) => (
-                  <SourceTag key={s} system={s} />
-                ))}
-              </div>
-            </div>
           </div>
         </div>
 
@@ -218,14 +210,19 @@ function ServiceDetail() {
         <div className="space-y-6">
           <section>
             <SectionHeading title={`What sits inside ${def.code}`} />
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div
+              className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
+              style={{ gridTemplateColumns: `repeat(auto-fit, minmax(220px, 1fr))` }}
+            >
               {subServices.map((sub) => (
-                <Card key={sub.id} className="!p-4">
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => setTab("kpi")}
+                  className="card group !p-4 text-left transition-shadow hover:shadow-raised"
+                >
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-[13.5px] leading-snug font-semibold text-ink">{sub.name}</p>
-                      <p className="mt-0.5 text-[11.5px] text-ink-4">{sub.code}</p>
-                    </div>
+                    <p className="min-w-0 text-[13.5px] leading-snug font-semibold text-ink">{sub.name}</p>
                     {sub.sla && (
                       <StatusPill status={sub.sla.status} size="sm">
                         {sub.sla.actual.toFixed(1)}%
@@ -235,14 +232,6 @@ function ServiceDetail() {
 
                   {sub.sla && (
                     <div className="mt-3.5">
-                      <div className="mb-1.5 flex items-baseline justify-between">
-                        <span className="text-[11.5px] text-ink-4">
-                          Weight {(sub.sla.weight * 100).toFixed(0)}% of tower SLA
-                        </span>
-                        <span className="text-[11.5px] font-medium text-ink-2 tnum">
-                          Target {sub.sla.target}%
-                        </span>
-                      </div>
                       <ProgressBar
                         value={sub.sla.actual}
                         max={100}
@@ -256,31 +245,56 @@ function ServiceDetail() {
                         height={5}
                         label={`${sub.name} service level ${sub.sla.actual.toFixed(1)}%`}
                       />
+                      <p className="mt-1.5 text-right text-[10.5px] text-ink-4 tnum">
+                        Target {sub.sla.target}%
+                      </p>
                     </div>
                   )}
 
-                  <p className="mt-3.5 border-t border-line-soft pt-2.5 text-[11.5px] text-ink-4">
-                    {sub.kpis.length} indicator{sub.kpis.length === 1 ? "" : "s"}
-                    {sub.bots > 0 && ` · ${sub.bots} automation${sub.bots === 1 ? "" : "s"}`}
-                  </p>
-                </Card>
+                  <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-line-soft pt-2.5">
+                    {sub.kpis.map((k) => (
+                      <span
+                        key={k.id}
+                        title={k.name}
+                        className="size-1.5 rounded-full"
+                        style={{
+                          background:
+                            k.status === "bad"
+                              ? "var(--color-bad)"
+                              : k.status === "warn"
+                                ? "var(--color-warn)"
+                                : "var(--color-good)",
+                        }}
+                      />
+                    ))}
+                    <span className="ml-1.5 text-[11px] text-ink-4 tnum">{sub.kpis.length} KPIs</span>
+                  </div>
+                </button>
               ))}
             </div>
           </section>
 
-          <section>
-            <SectionHeading title="Service activity" />
-            <MetricGrid metrics={service.overview} color={color} />
-          </section>
+          {def.id === "hrops" && <HrVisualRow service={service} color={color} />}
+
+          <SubServiceExplorer
+            subServices={service.subServices}
+            kpis={service.kpis}
+            color={color}
+            monthLabel={service.billing.currentMonthLabel}
+          />
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
             <Card>
-              <CardHeader eyebrow="Volume" title={service.activityChart.title} />
+              <CardHeader
+                eyebrow="Tower volume"
+                title={service.activityChart.title}
+                subtitle="Faded columns are forecast."
+              />
               <ColumnChart
-                data={service.activityChart.series.map((s) => ({
-                  label: s.short,
-                  value: s.value,
-                  isActual: s.isActual,
+                data={service.activityChart.series.map((x) => ({
+                  label: x.short,
+                  value: x.value,
+                  isActual: x.isActual,
                 }))}
                 format={(n) => formatNumber(n)}
                 height={230}
@@ -337,44 +351,6 @@ function ServiceDetail() {
             </div>
           </section>
 
-          {serviceBots.length > 0 && snapshot.automation && (
-            <Card>
-              <CardHeader
-                eyebrow="Digital workforce"
-                title={`${serviceBots.length} automation${serviceBots.length > 1 ? "s are" : " is"} running inside ${def.code}`}
-                action={
-                  <Link
-                    href="/automation"
-                    className="text-[12.5px] font-medium text-accent hover:text-accent-strong"
-                  >
-                    Open control tower →
-                  </Link>
-                }
-              />
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {[
-                  { label: "Bots & agents", value: formatNumber(serviceBots.length) },
-                  {
-                    label: "Transactions automated",
-                    value: formatNumber(serviceBots.reduce((a, b) => a + b.transactions, 0)),
-                  },
-                  {
-                    label: "Jobs this month",
-                    value: formatNumber(serviceBots.reduce((a, b) => a + b.jobs, 0)),
-                  },
-                  {
-                    label: "Effort released",
-                    value: `${formatNumber(serviceBots.reduce((a, b) => a + b.hoursSaved, 0))} hrs`,
-                  },
-                ].map((t) => (
-                  <div key={t.label} className="rounded-lg border border-line bg-surface-sunken p-3.5">
-                    <p className="eyebrow">{t.label}</p>
-                    <p className="mt-1.5 text-[18px] font-semibold text-ink tnum">{t.value}</p>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
         </div>
       )}
 
@@ -454,6 +430,9 @@ function ServiceDetail() {
                 </div>
               }
             />
+            <div className="mb-4">
+              <KpiOverviewPanel kpis={service.kpis} subServices={service.subServices} />
+            </div>
             <div className="space-y-3">
               {kpiGroups.map(([group, kpis], i) => (
                 <KpiGroupSection
@@ -542,5 +521,132 @@ function ServiceDetail() {
         onClose={() => setOpenIssue(null)}
       />
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* HR Ops visual row — TA pipeline, hiring channels, payroll & L&D     */
+/* ------------------------------------------------------------------ */
+
+/** Adjacent-pair CVD-validated ordering of the service palette. */
+const MIX_COLORS = [
+  "var(--color-svc-fna)",
+  "var(--color-svc-procurement)",
+  "var(--color-svc-idt)",
+  "var(--color-svc-automation)",
+  "var(--color-svc-analytics)",
+];
+
+function HrVisualRow({ service, color }: { service: ServiceSnapshot; color: string }) {
+  const metric = (id: string) => service.overview.find((m) => m.id === id)?.value ?? 0;
+
+  const funnel = [
+    { label: "Open positions", value: metric("open-positions") },
+    { label: "In progress", value: metric("in-progress") },
+    { label: "Offers pending", value: metric("offers") },
+  ];
+  const funnelMax = Math.max(...funnel.map((f) => f.value), 1);
+
+  const channels = service.kpis
+    .filter((k) => k.id.startsWith("hrops-raw-source-channel-"))
+    .map((k) => ({ label: k.name.replace(/^Source Channel - /, ""), value: k.actual }));
+  const channelTotal = channels.reduce((a, c) => a + c.value, 0) || 1;
+
+  const gauges = [
+    { label: "Payroll accuracy", value: metric("payroll-acc"), target: 99.5 },
+    { label: "Learning completion", value: metric("lnd-completion"), target: 85 },
+  ];
+
+  return (
+    <section className="grid gap-4 lg:grid-cols-3">
+      <Card>
+        <CardHeader eyebrow="Talent acquisition" title="Hiring pipeline" />
+        <div className="space-y-3.5">
+          {funnel.map((f, i) => (
+            <div key={f.label}>
+              <div className="mb-1 flex items-baseline justify-between">
+                <span className="text-[12.5px] text-ink-2">{f.label}</span>
+                <span className="text-[13px] font-semibold text-ink tnum">{formatNumber(f.value)}</span>
+              </div>
+              <div className="h-[18px] w-full">
+                <div
+                  className="mx-auto h-full rounded"
+                  style={{
+                    width: `${Math.max(6, (f.value / funnelMax) * 100)}%`,
+                    background: `color-mix(in srgb, ${color} ${100 - i * 26}%, white)`,
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-line-soft pt-3.5">
+          <div>
+            <p className="eyebrow">Closed YTD</p>
+            <p className="mt-1 text-[17px] font-semibold text-ink tnum">
+              {formatNumber(metric("closed"))}
+            </p>
+          </div>
+          <div>
+            <p className="eyebrow">Time to hire</p>
+            <p className="mt-1 text-[17px] font-semibold text-ink tnum">
+              {metric("tth").toFixed(1)} d
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader eyebrow="Talent acquisition" title="Hiring channel mix" />
+        <div className="flex h-3.5 w-full gap-[2px] overflow-hidden rounded-full">
+          {channels.map((c, i) => (
+            <div
+              key={c.label}
+              style={{
+                width: `${(c.value / channelTotal) * 100}%`,
+                background: MIX_COLORS[i % MIX_COLORS.length],
+              }}
+            />
+          ))}
+        </div>
+        <ul className="mt-4 space-y-2.5">
+          {channels.map((c, i) => (
+            <li key={c.label} className="flex items-center gap-2.5">
+              <span
+                className="size-2.5 shrink-0 rounded-full"
+                style={{ background: MIX_COLORS[i % MIX_COLORS.length] }}
+              />
+              <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-2">{c.label}</span>
+              <span className="text-[12.5px] font-medium text-ink tnum">
+                {((c.value / channelTotal) * 100).toFixed(0)}%
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+
+      <Card>
+        <CardHeader eyebrow="Payroll · L&D" title="Delivery quality" />
+        <div className="space-y-6">
+          {gauges.map((g) => (
+            <div key={g.label}>
+              <div className="mb-2 flex items-baseline justify-between">
+                <span className="text-[12.5px] text-ink-2">{g.label}</span>
+                <span className="text-[17px] font-semibold text-ink tnum">{g.value.toFixed(1)}%</span>
+              </div>
+              <BulletGauge
+                actual={g.value}
+                target={g.target}
+                direction="higher-better"
+                color={g.value >= g.target ? "var(--color-good)" : "var(--color-warn)"}
+                format={(n) => `${n.toFixed(1)}%`}
+                scaleMax={100}
+                scaleMin={Math.max(0, Math.min(g.value, g.target) - 20)}
+              />
+            </div>
+          ))}
+        </div>
+      </Card>
+    </section>
   );
 }

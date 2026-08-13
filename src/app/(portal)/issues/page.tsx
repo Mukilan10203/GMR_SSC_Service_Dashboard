@@ -16,6 +16,9 @@ import {
 import { HBarList } from "@/components/charts";
 import type { Issue, Priority, ServiceId } from "@/lib/domain/types";
 import { cx, formatNumber } from "@/lib/format";
+import { useSession } from "@/state/session";
+import { useTickets, type RaiseTicketInput } from "@/state/tickets";
+import { IconClose } from "@/components/portal/icons";
 
 export default function IssuesPage() {
   return (
@@ -26,9 +29,12 @@ export default function IssuesPage() {
 }
 
 function IssuesView() {
-  const { snapshot } = usePortalData();
+  const { snapshot, user } = usePortalData();
+  const { entityId } = useSession();
+  const { tickets, raiseTicket } = useTickets(entityId);
   const search = useSearchParams();
   const [selected, setSelected] = useState<Issue | null>(null);
+  const [raising, setRaising] = useState(false);
   const [serviceFilter, setServiceFilter] = useState<ServiceId | "all">("all");
   const [priorityFilter, setPriorityFilter] = useState<Priority | "all">(
     (search.get("priority") as Priority) ?? "all",
@@ -59,7 +65,7 @@ function IssuesView() {
     });
   }, [open, serviceFilter, priorityFilter, query]);
 
-  if (!snapshot) return null;
+  if (!snapshot || !user) return null;
 
   const byService = snapshot.services.map((s) => ({
     key: s.service.id,
@@ -75,8 +81,16 @@ function IssuesView() {
     <div className="mx-auto max-w-[1440px]">
       <PageHeader
         eyebrow="Issues & feedback"
-        title="What is open, and what your people are saying"
-        subtitle="Every item raised against your services, with ownership, ageing against the agreed resolution target, and the customer feedback connected to it."
+        title="Issues & feedback"
+        actions={
+          <button
+            type="button"
+            onClick={() => setRaising(true)}
+            className="rounded-lg bg-rail px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-rail-2"
+          >
+            + Raise a ticket
+          </button>
+        }
       />
 
       {/* ============================================================ */}
@@ -109,22 +123,36 @@ function IssuesView() {
             caption={`${snapshot.counts.avgResolutionDays.toFixed(1)} day average`}
           />
           <StatTile
-            label="Awaiting your input"
-            value={formatNumber(open.filter((i) => i.status === "awaiting-customer").length)}
+            label="Raised by you"
+            value={formatNumber(tickets.length)}
             emphasis
-            caption="Blocked on the customer side"
+            caption={tickets.length > 0 ? "With the SSC Service Desk" : "None yet"}
           />
         </div>
       </section>
 
       {/* ============================================================ */}
+      {/* Your tickets                                                 */}
+      {/* ============================================================ */}
+      {tickets.length > 0 && (
+        <section className="mb-8">
+          <SectionHeading
+            title="Your tickets"
+            action={<Badge tone="accent">{tickets.length} raised from this account</Badge>}
+          />
+          <Card padded={false}>
+            <div className="p-5">
+              <IssueTable issues={tickets} onSelect={setSelected} />
+            </div>
+          </Card>
+        </section>
+      )}
+
+      {/* ============================================================ */}
       {/* Issue register                                               */}
       {/* ============================================================ */}
       <section className="mb-8">
-        <SectionHeading
-          title="Issue register"
-          subtitle="Select any row for the full history, business impact and the KPI it affects."
-        />
+        <SectionHeading title="Issue register" />
 
         <Card padded={false}>
           <div className="flex flex-wrap items-center gap-3 border-b border-line p-4">
@@ -181,7 +209,7 @@ function IssuesView() {
               onSelect={setSelected}
               emptyNote={
                 open.length === 0
-                  ? "Nothing is open against your services. Everything raised has been resolved."
+                  ? "Nothing is open against your services."
                   : "No issues match these filters."
               }
             />
@@ -194,11 +222,7 @@ function IssuesView() {
       {/* ============================================================ */}
       <section className="mb-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
         <Card>
-          <CardHeader
-            eyebrow="Distribution"
-            title="Open items by service"
-            subtitle="Where attention is concentrated."
-          />
+          <CardHeader eyebrow="Distribution" title="Open items by service" />
           {byService.some((b) => b.value > 0) ? (
             <HBarList items={byService.filter((b) => b.value > 0)} format={(n) => formatNumber(n)} showShare />
           ) : (
@@ -230,13 +254,7 @@ function IssuesView() {
 
         <Card padded={false}>
           <div className="p-5">
-            <CardHeader
-              eyebrow="Closed"
-              title="Recently resolved"
-              subtitle={`${resolved.length} items closed in the last 30 days, at an average of ${snapshot.counts.avgResolutionDays.toFixed(
-                1,
-              )} days.`}
-            />
+            <CardHeader eyebrow="Closed" title="Recently resolved" />
             <IssueTable issues={resolved} onSelect={setSelected} />
           </div>
         </Card>
@@ -248,7 +266,6 @@ function IssuesView() {
       <section className="scroll-mt-24" id="feedback">
         <SectionHeading
           title="Customer feedback"
-          subtitle={`${feedback.length} comments submitted by the business users who consume your services. Complaints are linked to the indicator they relate to.`}
           action={
             <div className="flex gap-2">
               <Badge tone="bad">{feedback.filter((f) => f.type === "complaint").length} complaints</Badge>
@@ -274,6 +291,194 @@ function IssuesView() {
         feedback={snapshot.feedback}
         onClose={() => setSelected(null)}
       />
+
+      {raising && (
+        <RaiseTicketModal
+          services={snapshot.services.map((s) => ({
+            id: s.service.id,
+            name: s.service.name,
+            subServices: s.service.subServices.map((sub) => sub.name),
+          }))}
+          onClose={() => setRaising(false)}
+          onSubmit={(input) => {
+            const ticket = raiseTicket({ ...input, raisedBy: user.name });
+            setRaising(false);
+            setSelected(ticket);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Raise-a-ticket modal                                                */
+/* ------------------------------------------------------------------ */
+
+function RaiseTicketModal({
+  services,
+  onClose,
+  onSubmit,
+}: {
+  services: { id: ServiceId; name: string; subServices: string[] }[];
+  onClose: () => void;
+  onSubmit: (input: Omit<RaiseTicketInput, "raisedBy">) => void;
+}) {
+  const [serviceId, setServiceId] = useState<ServiceId>(services[0]?.id);
+  const [subServiceName, setSubServiceName] = useState<string>("");
+  const [priority, setPriority] = useState<Priority>("medium");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const subServices = services.find((s) => s.id === serviceId)?.subServices ?? [];
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) {
+      setError("Give the ticket a subject.");
+      return;
+    }
+    if (!description.trim()) {
+      setError("Describe the issue so the SSC team can act on it.");
+      return;
+    }
+    onSubmit({
+      serviceId,
+      subServiceName: subServiceName || undefined,
+      priority,
+      title: title.trim(),
+      description: description.trim(),
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-ink/40" onClick={onClose} />
+      <div className="relative w-full max-w-[520px] rounded-xl border border-line bg-surface shadow-pop">
+        <header className="flex items-center justify-between border-b border-line px-5 py-4">
+          <div>
+            <p className="eyebrow">SSC Service Desk</p>
+            <h2 className="mt-1 text-[16px] font-semibold text-ink">Raise a ticket</h2>
+          </div>
+          <button type="button" onClick={onClose} className="text-ink-4 hover:text-ink-2" aria-label="Close">
+            <IconClose size={18} />
+          </button>
+        </header>
+
+        <form onSubmit={submit} className="space-y-4 px-5 py-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="tk-service" className="mb-1.5 block text-[12.5px] font-medium text-ink-2">
+                Service
+              </label>
+              <select
+                id="tk-service"
+                value={serviceId}
+                onChange={(e) => {
+                  setServiceId(e.target.value as ServiceId);
+                  setSubServiceName("");
+                }}
+                className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-[13.5px] text-ink outline-none focus:border-accent"
+              >
+                {services.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="tk-sub" className="mb-1.5 block text-[12.5px] font-medium text-ink-2">
+                Sub-service <span className="font-normal text-ink-4">(optional)</span>
+              </label>
+              <select
+                id="tk-sub"
+                value={subServiceName}
+                onChange={(e) => setSubServiceName(e.target.value)}
+                className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-[13.5px] text-ink outline-none focus:border-accent"
+              >
+                <option value="">—</option>
+                {subServices.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-[12.5px] font-medium text-ink-2">Priority</p>
+            <div className="flex flex-wrap gap-1.5">
+              {(["critical", "high", "medium", "low"] as Priority[]).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPriority(p)}
+                  className={cx(
+                    "rounded-md border px-3 py-1.5 text-[12.5px] font-medium capitalize transition-colors",
+                    priority === p
+                      ? "border-accent-line bg-accent-soft text-accent-strong"
+                      : "border-line bg-surface text-ink-3 hover:border-line-strong hover:text-ink-2",
+                  )}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="tk-title" className="mb-1.5 block text-[12.5px] font-medium text-ink-2">
+              Subject
+            </label>
+            <input
+              id="tk-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Vendor payment stuck beyond due date"
+              className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-[13.5px] text-ink outline-none placeholder:text-ink-4 focus:border-accent"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="tk-desc" className="mb-1.5 block text-[12.5px] font-medium text-ink-2">
+              Description
+            </label>
+            <textarea
+              id="tk-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              placeholder="Reference numbers, dates, amounts — whatever helps the SSC team resolve it."
+              className="w-full resize-none rounded-lg border border-line bg-surface px-3 py-2.5 text-[13.5px] text-ink outline-none placeholder:text-ink-4 focus:border-accent"
+            />
+          </div>
+
+          {error && (
+            <p role="alert" className="rounded-lg border border-bad-line bg-bad-soft px-3 py-2.5 text-[12.5px] text-bad">
+              {error}
+            </p>
+          )}
+
+          <div className="flex items-center justify-end gap-2 border-t border-line pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-line bg-surface px-4 py-2.5 text-[13px] font-medium text-ink-2 transition-colors hover:border-line-strong"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="rounded-lg bg-rail px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-rail-2"
+            >
+              Submit to SSC
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

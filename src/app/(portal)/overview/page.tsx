@@ -38,7 +38,7 @@ export default function OverviewPage() {
   const { snapshot, user } = usePortalData();
   if (!snapshot || !user) return null;
 
-  const { billing, sla, cx: exp, services, attention, counts, automation, analytics, exec } = snapshot;
+  const { billing, sla, cx: exp, services, attention, counts } = snapshot;
 
   const criticalCount = counts.criticalIssues;
   const npsTrend = exp.npsQuarters.length >= 2
@@ -52,9 +52,6 @@ export default function OverviewPage() {
     budget: m.budget,
   }));
 
-  const automationSaving = automation?.costSavingYtd ?? 0;
-  const analyticsValue = analytics?.valueIdentified ?? 0;
-
   return (
     <div className="mx-auto max-w-[1440px]">
       <WelcomeHeader snapshot={snapshot} userName={user.name} role={user.title} />
@@ -63,10 +60,7 @@ export default function OverviewPage() {
       {/* Executive summary                                            */}
       {/* ============================================================ */}
       <section className="mb-8">
-        <SectionHeading
-          title="Executive summary"
-          subtitle={`Your Shared Service Centre position for ${snapshot.period.label}, as at ${snapshot.period.asOf}.`}
-        />
+        <SectionHeading title="Executive summary" />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <StatTile
             label="Total SSC billing"
@@ -92,7 +86,6 @@ export default function OverviewPage() {
             delta={
               <TrendPill trend={sla.trend} value={sla.deltaPts} direction="higher-better" unit="pts" label="MoM" />
             }
-            href="/performance"
           />
           <StatTile
             label="Customer satisfaction"
@@ -109,7 +102,7 @@ export default function OverviewPage() {
                 label="QoQ"
               />
             }
-            href="/performance#experience"
+            href="/issues#feedback"
           />
           <StatTile
             label="Net promoter score"
@@ -126,7 +119,7 @@ export default function OverviewPage() {
                 label="QoQ"
               />
             }
-            href="/performance#experience"
+            href="/issues#feedback"
           />
           <StatTile
             label="Open issues"
@@ -151,7 +144,7 @@ export default function OverviewPage() {
       {/* Attention required                                           */}
       {/* ============================================================ */}
       <div className="mb-8">
-        <AttentionSection items={attention} limit={4} showAllHref="/performance#attention" />
+        <AttentionSection items={attention} limit={4} showAllHref="/issues" />
       </div>
 
       {/* ============================================================ */}
@@ -160,7 +153,6 @@ export default function OverviewPage() {
       <section className="mb-8">
         <SectionHeading
           title="Services provided by the SSC"
-          subtitle={`${services.length} services delivered to ${snapshot.entity.name}. Select any service for usage, billing, performance and issues.`}
           action={
             <Link href="/services" className="text-[12.5px] font-medium text-accent hover:text-accent-strong">
               Compare all services →
@@ -180,7 +172,6 @@ export default function OverviewPage() {
       <section className="mb-8">
         <SectionHeading
           title="Billing"
-          subtitle="What you are paying, what is driving it, and how it compares with the agreed budget."
           action={
             <Link href="/billing" className="text-[12.5px] font-medium text-accent hover:text-accent-strong">
               Full billing analysis →
@@ -190,11 +181,7 @@ export default function OverviewPage() {
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
           <Card>
-            <CardHeader
-              eyebrow="Monthly billing"
-              title="Twelve-month billing against budget"
-              subtitle={billing.narrative}
-            />
+            <CardHeader eyebrow="Monthly billing" title="Twelve-month billing against budget" />
             <TrendChart
               data={monthlyTrend}
               format={(n) => `₹${formatMoneyAxis(n)}`}
@@ -283,10 +270,6 @@ export default function OverviewPage() {
                 format={(n) => formatMoney(n)}
                 showShare
               />
-              <p className="mt-4 border-t border-line-soft pt-3 text-[11.5px] leading-relaxed text-ink-4">
-                Every charge traces to a counted transaction or a named role on your account. Open any
-                service and choose Billing to see the line-by-line calculation.
-              </p>
             </Card>
           </div>
         </div>
@@ -298,7 +281,6 @@ export default function OverviewPage() {
       <section className="mb-8">
         <SectionHeading
           title="Customer experience"
-          subtitle="What your people say about the service they are receiving."
           action={
             <Link href="/issues#feedback" className="text-[12.5px] font-medium text-accent hover:text-accent-strong">
               All feedback →
@@ -308,11 +290,7 @@ export default function OverviewPage() {
 
         <div className="grid gap-4 lg:grid-cols-3">
           <Card>
-            <CardHeader
-              eyebrow="Net promoter score"
-              title="Measured quarterly"
-              subtitle="NPS is a relationship measure, so it is surveyed once a quarter rather than tracked daily."
-            />
+            <CardHeader eyebrow="Net promoter score" title="Measured quarterly" />
             <QuarterStrip
               points={exp.npsQuarters.map((q) => ({
                 label: q.label,
@@ -339,11 +317,7 @@ export default function OverviewPage() {
           </Card>
 
           <Card>
-            <CardHeader
-              eyebrow="Satisfaction by service"
-              title={`${exp.csat.toFixed(1)} / 5 overall`}
-              subtitle="Weighted by each service's share of your spend."
-            />
+            <CardHeader eyebrow="Satisfaction by service" title={`${exp.csat.toFixed(1)} / 5 overall`} />
             <HBarList
               items={exp.csatByService.map((c) => ({
                 key: c.serviceId,
@@ -385,122 +359,10 @@ export default function OverviewPage() {
       </section>
 
       {/* ============================================================ */}
-      {/* Value beyond transaction processing                          */}
-      {/* ============================================================ */}
-      <section className="mb-8">
-        <SectionHeading
-          title="Value the SSC is creating"
-          subtitle="Beyond processing transactions — effort released through automation, and money found through analytics."
-        />
-
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)]">
-          {automation && (
-            <Card>
-              <CardHeader
-                eyebrow="Automation"
-                title="Your digital workforce"
-                action={<StatusPill status={automation.successRate >= 97 ? "good" : "warn"} size="sm">{automation.successRate.toFixed(1)}%</StatusPill>}
-              />
-              <div className="mb-4 flex items-end gap-3">
-                <p className="metric text-[28px] leading-8 font-semibold tracking-[-0.02em] text-ink">
-                  {formatMoney(automationSaving)}
-                </p>
-                <p className="pb-1 text-[12.5px] text-ink-3">saved year to date</p>
-              </div>
-              <div className="space-y-0">
-                <DataRow label="Bots and AI agents" value={formatNumber(automation.totalBots)} />
-                <DataRow
-                  label="Transactions automated"
-                  value={formatNumber(automation.transactionsAutomated)}
-                  hint="This month"
-                />
-                <DataRow
-                  label="Effort released"
-                  value={`${formatNumber(automation.hoursSavedYtd)} hrs`}
-                  hint="Year to date"
-                />
-                <DataRow
-                  label="Return on automation fee"
-                  value={`${automation.roi.toFixed(2)}×`}
-                  emphasis
-                />
-              </div>
-              <Link
-                href="/automation"
-                className="mt-4 inline-block text-[12.5px] font-medium text-accent hover:text-accent-strong"
-              >
-                Open the control tower →
-              </Link>
-            </Card>
-          )}
-
-          {analytics && (
-            <Card>
-              <CardHeader eyebrow="Analytics" title="Insight from your own data" />
-              <div className="mb-4 flex items-end gap-3">
-                <p className="metric text-[28px] leading-8 font-semibold tracking-[-0.02em] text-ink">
-                  {formatMoney(analyticsValue)}
-                </p>
-                <p className="pb-1 text-[12.5px] text-ink-3">identified year to date</p>
-              </div>
-              <div className="space-y-0">
-                <DataRow label="Live analytics products" value={formatNumber(analytics.liveProducts)} />
-                <DataRow label="Scheduled reports & feeds" value={formatNumber(analytics.totalReports)} />
-                <DataRow label="Insights generated" value={formatNumber(analytics.totalInsights)} />
-                <DataRow label="Active business users" value={formatNumber(analytics.activeUsers)} emphasis />
-              </div>
-              <Link
-                href="/analytics"
-                className="mt-4 inline-block text-[12.5px] font-medium text-accent hover:text-accent-strong"
-              >
-                See the analytics portfolio →
-              </Link>
-            </Card>
-          )}
-
-          <Card>
-            <CardHeader
-              eyebrow="Executive analytics"
-              title="Your business, not just your service"
-              subtitle="Indicators the SSC produces from your finance data."
-            />
-            <ul className="divide-y divide-line-soft">
-              {exec.slice(0, 5).map((m) => (
-                <li key={m.id} className="flex items-baseline justify-between gap-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="text-[13px] text-ink-2">{m.label}</p>
-                    <p className="mt-0.5 truncate text-[11.5px] text-ink-4">{m.note}</p>
-                  </div>
-                  <p className="shrink-0 text-[14px] font-semibold text-ink tnum">
-                    {m.format === "percent" && m.value > 0 ? "+" : ""}
-                    {formatMetric(m.value, m.format)}
-                  </p>
-                </li>
-              ))}
-            </ul>
-            <Link
-              href="/analytics#executive"
-              className="mt-3 inline-block text-[12.5px] font-medium text-accent hover:text-accent-strong"
-            >
-              All executive indicators →
-            </Link>
-          </Card>
-        </div>
-      </section>
-
-      {/* ============================================================ */}
       {/* Service performance summary                                  */}
       {/* ============================================================ */}
       <section>
-        <SectionHeading
-          title="Service performance at a glance"
-          subtitle="Every service, side by side, on the four measures that matter."
-          action={
-            <Link href="/performance" className="text-[12.5px] font-medium text-accent hover:text-accent-strong">
-              Full performance view →
-            </Link>
-          }
-        />
+        <SectionHeading title="Service performance at a glance" />
         <Card padded={false}>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] border-collapse text-[13px]">

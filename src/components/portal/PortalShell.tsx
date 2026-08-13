@@ -29,28 +29,25 @@ import {
   IconPortfolio,
   IconSearch,
   IconServices,
+  IconSidebar,
 } from "./icons";
 
 /* ------------------------------------------------------------------ */
 /* Navigation model                                                    */
 /* ------------------------------------------------------------------ */
 
-/**
- * Automation and Analytics are cross-cutting capabilities delivered inside
- * the five towers rather than towers of their own, so they sit below the
- * service navigation and are always available.
- */
 const NAV = [
   { href: "/overview", label: "Overview", Icon: IconOverview },
   { href: "/services", label: "Services", Icon: IconServices, expandable: true },
   { href: "/billing", label: "Billing", Icon: IconBilling },
-  { href: "/performance", label: "Performance", Icon: IconPerformance },
   { href: "/issues", label: "Issues & Feedback", Icon: IconIssues },
 ] as const;
 
-const CAPABILITY_NAV = [
-  { href: "/automation", label: "Automation", Icon: IconAutomation },
-  { href: "/analytics", label: "Analytics", Icon: IconAnalytics },
+/** Capabilities not yet available in this preview — shown locked, not hidden. */
+const LOCKED_NAV = [
+  { label: "Performance", Icon: IconPerformance },
+  { label: "Automation", Icon: IconAutomation },
+  { label: "Analytics", Icon: IconAnalytics },
 ] as const;
 
 /* ------------------------------------------------------------------ */
@@ -349,20 +346,6 @@ function Search() {
         group: "Issues",
         href: `/issues?issue=${i.id}`,
       })),
-      ...(snapshot.analytics?.products ?? []).map((p) => ({
-        id: `an-${p.id}`,
-        label: p.name,
-        detail: `${p.category} · ${p.sourceSystem}`,
-        group: "Analytics",
-        href: "/analytics",
-      })),
-      ...(snapshot.automation?.bots ?? []).map((b) => ({
-        id: `bot-${b.id}`,
-        label: b.name,
-        detail: `${b.kind} · ${b.process}`,
-        group: "Automation",
-        href: "/automation",
-      })),
     ];
 
     const needle = q.trim().toLowerCase();
@@ -509,7 +492,13 @@ function AccountMenu() {
 /* Sidebar                                                             */
 /* ------------------------------------------------------------------ */
 
-function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+function Sidebar({
+  onNavigate,
+  collapsed = false,
+}: {
+  onNavigate?: () => void;
+  collapsed?: boolean;
+}) {
   const pathname = usePathname();
   const { snapshot, user } = usePortalData();
   const [servicesOpen, setServicesOpen] = useState(true);
@@ -522,13 +511,13 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col bg-rail">
-      <div className="px-5 py-5">
-        <Link href="/overview" onClick={onNavigate}>
-          <PortalMark tone="light" />
+      <div className={cx("py-5", collapsed ? "flex justify-center px-3" : "px-5")}>
+        <Link href="/overview" onClick={onNavigate} title="SSC Customer Portal">
+          <PortalMark tone="light" compact={collapsed} />
         </Link>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 pb-4">
+      <nav className={cx("flex-1 overflow-y-auto pb-4", collapsed ? "px-2" : "px-3")}>
         <ul className="space-y-0.5">
           {nav.map(({ href, label, Icon, ...rest }) => {
             const active = pathname === href || (href !== "/overview" && pathname.startsWith(href));
@@ -539,17 +528,19 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   <Link
                     href={href}
                     onClick={onNavigate}
+                    title={collapsed ? label : undefined}
                     className={cx(
-                      "flex flex-1 items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] transition-colors",
+                      "flex flex-1 items-center rounded-lg py-2 text-[13.5px] transition-colors",
+                      collapsed ? "justify-center px-0" : "gap-2.5 px-3",
                       active
                         ? "bg-white/[0.09] font-medium text-white"
                         : "text-rail-ink hover:bg-white/[0.05] hover:text-white",
                     )}
                   >
                     <Icon size={17} className={active ? "text-white" : "text-rail-ink-dim"} />
-                    {label}
+                    {!collapsed && label}
                   </Link>
-                  {expandable && (
+                  {expandable && !collapsed && (
                     <button
                       type="button"
                       onClick={() => setServicesOpen((v) => !v)}
@@ -564,7 +555,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   )}
                 </div>
 
-                {expandable && servicesOpen && services.length > 0 && (
+                {expandable && !collapsed && servicesOpen && services.length > 0 && (
                   <ul className="mt-0.5 mb-1 ml-[22px] space-y-px border-l border-rail-line pl-2.5">
                     {services.map((s) => {
                       const shref = `/services/${s.service.id}`;
@@ -619,30 +610,26 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
           <li className="pt-2">
             <div className="mx-3 mb-2 border-t border-rail-line" />
-            <p className="mb-1 px-3 text-[10.5px] font-semibold tracking-[0.07em] text-rail-ink-dim uppercase">
-              Delivered across your services
-            </p>
             <ul className="space-y-0.5">
-              {CAPABILITY_NAV.map(({ href, label, Icon }) => {
-                const active = pathname.startsWith(href);
-                return (
-                  <li key={href}>
-                    <Link
-                      href={href}
-                      onClick={onNavigate}
-                      className={cx(
-                        "flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] transition-colors",
-                        active
-                          ? "bg-white/[0.09] font-medium text-white"
-                          : "text-rail-ink hover:bg-white/[0.05] hover:text-white",
-                      )}
-                    >
-                      <Icon size={17} className={active ? "text-white" : "text-rail-ink-dim"} />
-                      {label}
-                    </Link>
-                  </li>
-                );
-              })}
+              {LOCKED_NAV.map(({ label, Icon }) => (
+                <li key={label}>
+                  <span
+                    className={cx(
+                      "flex cursor-not-allowed items-center rounded-lg py-2 text-[13.5px] text-rail-ink-dim/70",
+                      collapsed ? "justify-center px-0" : "gap-2.5 px-3",
+                    )}
+                    title={`${label} — coming soon`}
+                  >
+                    <Icon size={17} className="text-rail-ink-dim/50" />
+                    {!collapsed && (
+                      <>
+                        <span className="flex-1">{label}</span>
+                        <IconLock size={13} className="text-rail-ink-dim/60" />
+                      </>
+                    )}
+                  </span>
+                </li>
+              ))}
             </ul>
           </li>
 
@@ -652,22 +639,24 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               <Link
                 href="/portfolio"
                 onClick={onNavigate}
+                title={collapsed ? "Portfolio" : undefined}
                 className={cx(
-                  "flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] transition-colors",
+                  "flex items-center rounded-lg py-2 text-[13.5px] transition-colors",
+                  collapsed ? "justify-center px-0" : "gap-2.5 px-3",
                   pathname.startsWith("/portfolio")
                     ? "bg-white/[0.09] font-medium text-white"
                     : "text-rail-ink hover:bg-white/[0.05] hover:text-white",
                 )}
               >
                 <IconPortfolio size={17} className={pathname.startsWith("/portfolio") ? "text-white" : "text-rail-ink-dim"} />
-                Portfolio
+                {!collapsed && "Portfolio"}
               </Link>
             </li>
           )}
         </ul>
       </nav>
 
-      <div className="border-t border-rail-line px-5 py-4">
+      <div className={cx("border-t border-rail-line px-5 py-4", collapsed && "hidden")}>
         {snapshot && (
           <>
             <p className="text-[11px] tracking-wide text-rail-ink-dim uppercase">Contracted with</p>
@@ -694,16 +683,32 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 export function PortalShell({ children }: { children: ReactNode }) {
   const { snapshot } = usePortalData();
   const [drawer, setDrawer] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
   const [exported, setExported] = useState(false);
 
   useEffect(() => setDrawer(false), [pathname]);
 
+  // Remember the rail state — a full-width view should survive navigation.
+  useEffect(() => {
+    setCollapsed(window.localStorage.getItem("ssc-rail-collapsed") === "1");
+  }, []);
+  const toggleRail = () =>
+    setCollapsed((v) => {
+      window.localStorage.setItem("ssc-rail-collapsed", v ? "0" : "1");
+      return !v;
+    });
+
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
+    <div
+      className={cx(
+        "min-h-dvh lg:grid",
+        collapsed ? "lg:grid-cols-[64px_minmax(0,1fr)]" : "lg:grid-cols-[248px_minmax(0,1fr)]",
+      )}
+    >
       {/* Desktop rail */}
       <aside className="sticky top-0 hidden h-dvh lg:block">
-        <Sidebar />
+        <Sidebar collapsed={collapsed} />
       </aside>
 
       {/* Mobile drawer */}
@@ -719,6 +724,17 @@ export function PortalShell({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-col">
         <header className="sticky top-0 z-40 border-b border-line bg-canvas/85 backdrop-blur-md">
           <div className="flex flex-wrap items-center gap-3 px-5 py-3 xl:px-8">
+            <button
+              type="button"
+              onClick={toggleRail}
+              className="hidden size-9 items-center justify-center rounded-lg border border-line bg-surface text-ink-2 transition-colors hover:border-line-strong hover:text-ink lg:flex"
+              aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+              aria-pressed={collapsed}
+              title={collapsed ? "Expand navigation" : "Collapse navigation"}
+            >
+              <IconSidebar size={17} />
+            </button>
+
             <button
               type="button"
               onClick={() => setDrawer(true)}

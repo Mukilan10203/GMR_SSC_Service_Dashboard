@@ -244,14 +244,6 @@ export const SERVICES: ServiceDefinition[] = [
           "Training calendar administration, enrolment and attendance, compliance curricula and completion tracking.",
         slaComponentId: "hrops-sla-lnd",
       },
-      {
-        id: "hrops-core",
-        code: "Core HR",
-        name: "Employee Lifecycle & Helpdesk",
-        description:
-          "Onboarding and exit formalities, employee data administration and the tier-1 employee helpdesk on SAP SuccessFactors.",
-        slaComponentId: "hrops-sla-core",
-      },
     ],
     colorKey: "hrops",
     sourceSystems: ["SAP SuccessFactors", "Payroll engine", "HR service desk"],

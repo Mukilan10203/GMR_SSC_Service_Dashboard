@@ -486,6 +486,35 @@ export interface AttentionItem {
 /* Composite snapshots                                                 */
 /* ------------------------------------------------------------------ */
 
+/**
+ * One sub-service, resolved end to end: the volume it processed, what that
+ * volume was charged at, the people ring-fenced to it, and the service level
+ * it is measured on. This is what the sub-service drill-down renders.
+ */
+export interface SubServiceDetail {
+  id: string;
+  code: string;
+  name: string;
+  /** Monthly driver volume across the fiscal year. */
+  series: { short: string; value: number; isActual: boolean }[];
+  unit: string;
+  unitSingular: string;
+  currentVolume: number;
+  prevVolume: number;
+  ytdVolume: number;
+  rate: number;
+  /** volume × rate for the current month. */
+  txnAmount: number;
+  fteCount: number;
+  fteAmount: number;
+  /** txnAmount + fteAmount — the part of the bill attributable to this sub-service. */
+  monthTotal: number;
+  /** Share of the tower's attributable spend, 0–1. */
+  shareOfService: number;
+  sla?: SlaComponent;
+  kpiIds: string[];
+}
+
 export interface ServiceSnapshot {
   service: ServiceDefinition;
   /** The 2–3 numbers that belong on the service card. */
@@ -501,6 +530,8 @@ export interface ServiceSnapshot {
   billing: ServiceBilling;
   sla: ServiceSla;
   kpis: Kpi[];
+  /** Per-sub-service drill-down, in catalogue order. */
+  subServices: SubServiceDetail[];
   issueIds: string[];
   feedbackIds: string[];
   /** Contracted capacity utilisation, 0–1. */

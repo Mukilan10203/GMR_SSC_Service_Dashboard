@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePortalData } from "@/components/portal/usePortalData";
-import { AttentionSection, PageHeader } from "@/components/portal/blocks";
+import { AttentionSection, LockedPage, PageHeader } from "@/components/portal/blocks";
 import {
   Badge,
   Card,
@@ -23,6 +23,12 @@ import { FeedbackCard } from "@/components/portal/issue-blocks";
 import { formatMetric, formatNumber, formatPercent } from "@/lib/format";
 
 export default function PerformancePage() {
+  const { snapshot } = usePortalData();
+  if (!snapshot) return null;
+  return <LockedPage title="Performance" />;
+}
+
+function PerformancePageUnlocked() {
   const { snapshot } = usePortalData();
   if (!snapshot) return null;
 

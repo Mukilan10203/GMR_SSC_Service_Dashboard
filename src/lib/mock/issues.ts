@@ -344,9 +344,9 @@ export const ISSUE_TEMPLATES: IssueTemplate[] = [
   },
   {
     key: "hrops-helpdesk-kb",
-    title: "Employee helpdesk knowledge base requires refresh",
+    title: "ASK HR knowledge base requires refresh",
     description:
-      "Around a third of helpdesk tickets are repeat queries already answered in the knowledge base, but the articles predate the current leave policy and are no longer trusted by employees.",
+      "Around a third of ASK HR queries are repeat questions already answered in the knowledge base, but the articles predate the current leave policy and are no longer trusted by employees.",
     serviceId: "hrops",
     priority: "low",
     status: "open",
@@ -355,8 +355,8 @@ export const ISSUE_TEMPLATES: IssueTemplate[] = [
     slaTargetDays: 45,
     owner: "Ritu Chandra",
     ownerTeam: "HR Ops — Employee Services",
-    linkedKpiId: "hrops-kpi-helpdesk",
-    impact: "Deflectable ticket volume estimated at 640 tickets per month across the account.",
+    linkedKpiId: "hrops-raw-ask-hr-within-tat-of-2-wd",
+    impact: "Deflectable query volume estimated at 640 tickets per month across the account.",
     timeline: [
       { dayOffset: 0, note: "Repeat query analysis presented at the quarterly service review.", by: "Ritu Chandra" },
       { dayOffset: 14, note: "Content refresh scoped — 38 articles to be rewritten.", by: "Ritu Chandra" },
@@ -378,7 +378,7 @@ export const ISSUE_TEMPLATES: IssueTemplate[] = [
     ownerTeam: "HR Ops — Employee Services",
     linkedKpiId: "hrops-kpi-sla",
     impact:
-      "Employee lifecycle completion is at 80.0% against a 95% target and is the second-largest contributor to the HR Ops SLA shortfall.",
+      "Day-one readiness misses are a material contributor to the HR Ops SLA landing at 79.4% against the 90% commitment.",
     timeline: [
       { dayOffset: 0, note: "Day-one readiness misses escalated by the operations leadership team.", by: "Ritu Chandra" },
       { dayOffset: 6, note: "Dependency mapped to security clearance. 71% of misses trace to this step.", by: "Ritu Chandra" },
@@ -389,9 +389,9 @@ export const ISSUE_TEMPLATES: IssueTemplate[] = [
   },
   {
     key: "hrops-helpdesk-ghial",
-    title: "Helpdesk resolution rate below target for three consecutive months",
+    title: "ASK HR resolution rate below target for three consecutive months",
     description:
-      "First-contact resolution has fallen as ticket volume grew 22% following the terminal expansion, without a corresponding increase in helpdesk capacity.",
+      "First-contact resolution has fallen as query volume grew 22% following the terminal expansion, without a corresponding increase in ASK HR capacity.",
     serviceId: "hrops",
     priority: "high",
     status: "in-progress",
@@ -400,8 +400,8 @@ export const ISSUE_TEMPLATES: IssueTemplate[] = [
     slaTargetDays: 30,
     owner: "Ritu Chandra",
     ownerTeam: "HR Ops — Employee Services",
-    linkedKpiId: "hrops-kpi-helpdesk",
-    impact: "Lifecycle and helpdesk resolution is at 80.0% against a 95% target.",
+    linkedKpiId: "hrops-raw-ask-hr-within-tat-of-2-wd",
+    impact: "Learning & development delivery is at 74.0% against a 95% target.",
     timeline: [
       { dayOffset: 0, note: "Third consecutive month below target. Formal capacity review opened.", by: "Ritu Chandra" },
       { dayOffset: 12, note: "Volume growth confirmed at 22% year on year against flat capacity.", by: "Ritu Chandra" },
@@ -981,8 +981,8 @@ export const FEEDBACK_TEMPLATES: FeedbackTemplate[] = [
     rating: 4,
     type: "compliment",
     quote:
-      "Helpdesk response has improved a lot since the escalation matrix was published. Employees know who to go to and the first response is usually the same day.",
-    linkedKpiId: "hrops-kpi-helpdesk",
+      "ASK HR response has improved a lot since the escalation matrix was published. Employees know who to go to and the first response is usually the same day.",
+    linkedKpiId: "hrops-raw-ask-hr-within-tat-of-2-wd",
     responded: false,
     rank: 4,
   },

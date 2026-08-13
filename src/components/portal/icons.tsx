@@ -135,6 +135,13 @@ export const IconMenu = ({ size = 20, className }: IconProps) => (
   </svg>
 );
 
+export const IconSidebar = ({ size = 18, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <rect x="2.5" y="3.5" width="15" height="13" rx="2" />
+    <path d="M8 3.5v13" />
+  </svg>
+);
+
 export const IconLock = ({ size = 16, className }: IconProps) => (
   <svg {...base(size)} className={className}>
     <rect x="4.5" y="9" width="11" height="8" rx="1.6" />

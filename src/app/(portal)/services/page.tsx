@@ -9,7 +9,6 @@ import {
   Card,
   CardHeader,
   SectionHeading,
-  SourceTag,
   StatusPill,
   Table,
   Td,
@@ -33,13 +32,6 @@ export default function ServicesPage() {
       <PageHeader
         eyebrow="My SSC services"
         title="Services provided to your organisation"
-        subtitle={
-          <>
-            {services.length} service tower{services.length === 1 ? "" : "s"} {services.length === 1 ? "is" : "are"} live
-            for {entity.name} in this preview
-            {locked.length > 0 && <> · {locked.length} more shown locked below</>}.
-          </>
-        }
       />
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -56,9 +48,7 @@ export default function ServicesPage() {
       {/* ============================================================ */}
       <section className="mb-8">
         <SectionHeading
-          title="Compare services side by side"
-          subtitle="The same measures across every service, so relative performance and relative cost are visible together."
-        />
+          title="Compare services side by side" />
         <Card padded={false}>
           <div className="overflow-x-auto p-5">
             <table className="w-full min-w-[900px] border-collapse text-[13px]">
@@ -186,7 +176,6 @@ export default function ServicesPage() {
           <CardHeader
             eyebrow="Consumption"
             title="Where your service spend goes"
-            subtitle="Full-year forecast by service tower."
           />
           <HBarList
             items={services.map((s) => ({
@@ -207,7 +196,6 @@ export default function ServicesPage() {
           <CardHeader
             eyebrow="Experience"
             title="Satisfaction by service"
-            subtitle="Where the service is landing well, and where it is not."
           />
           <HBarList
             items={exp.csatByService.map((c) => ({
@@ -226,39 +214,6 @@ export default function ServicesPage() {
         </Card>
       </section>
 
-      {/* ============================================================ */}
-      {/* Data source concept                                          */}
-      {/* ============================================================ */}
-      <section>
-        <SectionHeading
-          title="Where this information will come from"
-          subtitle="In production, each area of the portal is fed by the system that already owns the data. No integration is active in this prototype."
-        />
-        <Card>
-          <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
-            {DATA_SOURCE_MAP.map((d) => (
-              <div key={d.area} className="border-t border-line-soft pt-3">
-                <p className="text-[13px] font-medium text-ink">{d.area}</p>
-                <ul className="mt-1.5 space-y-1">
-                  {d.systems.map((s) => (
-                    <li key={s}>
-                      <SourceTag system={s} />
-                    </li>
-                  ))}
-                </ul>
-                <Badge tone="outline" className="mt-2">
-                  {d.status}
-                </Badge>
-              </div>
-            ))}
-          </div>
-          <p className="mt-5 border-t border-line-soft pt-4 text-[11.5px] leading-relaxed text-ink-4">
-            The application reads every figure through a single data service. Replacing the illustrative
-            dataset with live SAP, Ariba, HR and automation feeds is a change behind that interface —
-            no screen in this portal needs to be rebuilt.
-          </p>
-        </Card>
-      </section>
     </div>
   );
 }

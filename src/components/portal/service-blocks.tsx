@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { Feedback, Issue, Kpi, ServiceBilling, ServiceSla } from "@/lib/domain/types";
+import type {
+  Feedback,
+  Issue,
+  Kpi,
+  ServiceBilling,
+  ServiceSla,
+  SubServiceDetail,
+} from "@/lib/domain/types";
 import { SUB_SERVICE_BY_SLA_COMPONENT } from "@/lib/mock/organisation";
 import {
   cx,
@@ -20,7 +27,8 @@ import {
   DataRow,
   PRIORITY_TONE,
   ProgressBar,
-  SourceTag,
+  SectionHeading,
+  StatTile,
   StatusPill,
   Table,
   Td,
@@ -28,7 +36,7 @@ import {
   TrendPill,
   serviceColor,
 } from "@/components/ui/primitives";
-import { BulletGauge, HBarList, Sparkline, TrendChart } from "@/components/charts";
+import { BulletGauge, ColumnChart, HBarList, Sparkline, TrendChart } from "@/components/charts";
 import { IconChevronDown } from "./icons";
 
 /* ------------------------------------------------------------------ */
@@ -40,11 +48,14 @@ export function KpiCard({
   issues,
   feedback,
   color,
+  groupChip,
 }: {
   kpi: Kpi;
   issues: Issue[];
   feedback: Feedback[];
   color: string;
+  /** Subfunction label shown above the name when it adds information. */
+  groupChip?: string;
 }) {
   const [open, setOpen] = useState(false);
   const linkedIssues = issues.filter((i) => kpi.relatedIssueIds.includes(i.id));
@@ -67,6 +78,7 @@ export function KpiCard({
     <Card className={cx(kpi.status === "bad" && "border-bad-line")}>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
+          {groupChip && <p className="eyebrow mb-1">{groupChip}</p>}
           <h3 className="text-[14px] leading-snug font-semibold text-ink">{kpi.name}</h3>
         </div>
         <StatusPill status={kpi.status} size="sm" />
@@ -199,9 +211,6 @@ export function KpiCard({
         </>
       )}
 
-      <p className="mt-3.5 border-t border-line-soft pt-3">
-        <SourceTag system={kpi.sourceSystem} />
-      </p>
     </Card>
   );
 }
@@ -255,7 +264,14 @@ export function KpiGroupSection({
       {open && (
         <div className="grid gap-4 border-t border-line p-5 lg:grid-cols-2 2xl:grid-cols-3">
           {kpis.map((k) => (
-            <KpiCard key={k.id} kpi={k} issues={issues} feedback={feedback} color={color} />
+            <KpiCard
+              key={k.id}
+              kpi={k}
+              issues={issues}
+              feedback={feedback}
+              color={color}
+              groupChip={k.group && k.group !== title ? k.group : undefined}
+            />
           ))}
         </div>
       )}
@@ -273,7 +289,6 @@ export function SlaBreakdown({ sla, color }: { sla: ServiceSla; color: string })
       <CardHeader
         eyebrow="Service level"
         title={`Where the ${sla.overall.toFixed(1)}% comes from`}
-        subtitle="The headline service level is a weighted roll-up across the tower's sub-services. This is the weighting and each one's contribution, so it is clear which part of the tower is carrying — or dragging — the number."
         action={<StatusPill status={sla.status}>{`Target ${sla.target}%`}</StatusPill>}
       />
 
@@ -403,7 +418,6 @@ export function ChargingModel({ billing, color }: { billing: ServiceBilling; col
                 <Td>
                   <span className="font-medium">{l.label}</span>
                   <span className="mt-1 block">
-                    <SourceTag system={l.sourceSystem} />
                   </span>
                 </Td>
                 <Td align="right">{formatNumber(l.volume)}</Td>
@@ -433,7 +447,7 @@ export function ChargingModel({ billing, color }: { billing: ServiceBilling; col
         <CardHeader
           eyebrow="FTE-based charging"
           title="You are charged for dedicated capacity"
-          subtitle={`Ring-fenced people on your account, at the contracted rate per FTE per month.`}
+          subtitle="Contracted rate per FTE per month."
           action={
             <Badge tone="outline">{((1 - txnShare) * 100).toFixed(0)}% of this month&rsquo;s fee</Badge>
           }
@@ -512,7 +526,6 @@ export function BillingDrivers({ billing, color }: { billing: ServiceBilling; co
       <CardHeader
         eyebrow="Billing movement"
         title={`${billing.momPct >= 0 ? "Up" : "Down"} ${Math.abs(billing.momPct).toFixed(1)}% on last month`}
-        subtitle={billing.narrative}
         action={
           <TrendPill
             trend={billing.momPct > 0.75 ? "up" : billing.momPct < -0.75 ? "down" : "flat"}
@@ -599,7 +612,7 @@ export function BillingTrend({ billing, color }: { billing: ServiceBilling; colo
       <CardHeader
         eyebrow="Twelve-month view"
         title="Billing against budget"
-        subtitle="Solid line is billed actuals; the dashed grey line is the agreed budget. Hatched months are forecast at the current run rate."
+        subtitle="Dashed line is budget · hatched months are forecast."
       />
       <TrendChart
         data={billing.monthly.map((m) => ({
@@ -731,5 +744,502 @@ export function CompletionCard({
         showShare
       />
     </Card>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Sub-service explorer — pick a sub-service, see its own numbers       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Adjacent-pair CVD-validated hue order (protan/deutan ΔE 9.1, normal-vision
+ * 19.6 against a white card). Assign in sequence; never cycle or reorder.
+ */
+export const SUB_SERVICE_COLORS = [
+  "var(--color-svc-fna)",
+  "var(--color-svc-procurement)",
+  "var(--color-svc-idt)",
+  "var(--color-svc-automation)",
+  "var(--color-svc-analytics)",
+];
+
+export function SubServiceExplorer({
+  subServices,
+  kpis,
+  color,
+  monthLabel,
+}: {
+  subServices: SubServiceDetail[];
+  kpis: Kpi[];
+  color: string;
+  monthLabel: string;
+}) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = subServices.find((s) => s.id === selectedId) ?? null;
+  const hueOf = (id: string) =>
+    SUB_SERVICE_COLORS[Math.max(0, subServices.findIndex((s) => s.id === id)) % SUB_SERVICE_COLORS.length];
+
+  return (
+    <section>
+      <SectionHeading title="Service activity" />
+
+      {/* Selector */}
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          onClick={() => setSelectedId(null)}
+          className={cx(
+            "rounded-md border px-3 py-1.5 text-[12.5px] font-medium transition-colors",
+            !selected
+              ? "border-accent-line bg-accent-soft text-accent-strong"
+              : "border-line bg-surface text-ink-3 hover:border-line-strong hover:text-ink-2",
+          )}
+        >
+          All sub-services
+        </button>
+        {subServices.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => setSelectedId(s.id)}
+            className={cx(
+              "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-[12.5px] font-medium transition-colors",
+              selected?.id === s.id
+                ? "border-accent-line bg-accent-soft text-accent-strong"
+                : "border-line bg-surface text-ink-3 hover:border-line-strong hover:text-ink-2",
+            )}
+          >
+            <span className="size-2 rounded-full" style={{ background: hueOf(s.id) }} />
+            {s.name}
+          </button>
+        ))}
+      </div>
+
+      {selected ? (
+        <SubServiceDetailView
+          detail={selected}
+          kpis={kpis.filter((k) => selected.kpiIds.includes(k.id))}
+          hue={hueOf(selected.id)}
+          monthLabel={monthLabel}
+        />
+      ) : (
+        <SubServiceOverview
+          subServices={subServices}
+          hueOf={hueOf}
+          color={color}
+          monthLabel={monthLabel}
+          onSelect={setSelectedId}
+        />
+      )}
+    </section>
+  );
+}
+
+/** All sub-services side by side: spend split (common unit) + volume small multiples. */
+function SubServiceOverview({
+  subServices,
+  hueOf,
+  color,
+  monthLabel,
+  onSelect,
+}: {
+  subServices: SubServiceDetail[];
+  hueOf: (id: string) => string;
+  color: string;
+  monthLabel: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader eyebrow={monthLabel} title="Attributable spend by sub-service" />
+          <HBarList
+            items={subServices.map((s) => ({
+              key: s.id,
+              label: s.name,
+              sublabel: `${formatNumber(s.currentVolume)} ${s.unit}`,
+              value: s.monthTotal,
+              color: hueOf(s.id),
+            }))}
+            format={(n) => formatMoney(n)}
+            showShare
+          />
+        </Card>
+
+        <Card>
+          <CardHeader eyebrow="Service level" title="Achievement against target" />
+          <div className="space-y-4">
+            {subServices.map((s) =>
+              s.sla ? (
+                <div key={s.id}>
+                  <div className="mb-1.5 flex items-baseline justify-between gap-3">
+                    <span className="truncate text-[12.5px] text-ink-2">{s.name}</span>
+                    <span className="shrink-0 text-[13px] font-semibold text-ink tnum">
+                      {s.sla.actual.toFixed(1)}%
+                    </span>
+                  </div>
+                  <BulletGauge
+                    actual={s.sla.actual}
+                    target={s.sla.target}
+                    direction="higher-better"
+                    color={
+                      s.sla.status === "bad"
+                        ? "var(--color-bad)"
+                        : s.sla.status === "warn"
+                          ? "var(--color-warn)"
+                          : "var(--color-good)"
+                    }
+                    format={(n) => `${n.toFixed(0)}%`}
+                    scaleMax={100}
+                    scaleMin={Math.max(0, Math.min(s.sla.actual, s.sla.target) - 15)}
+                  />
+                </div>
+              ) : null,
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Volume small multiples — each on its own scale, its own unit. */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {subServices.map((s) => {
+          const mom = s.prevVolume ? ((s.currentVolume - s.prevVolume) / s.prevVolume) * 100 : 0;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => onSelect(s.id)}
+              className="card !p-4 text-left transition-shadow hover:shadow-raised"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-semibold text-ink">{s.name}</p>
+                  <p className="mt-1 text-[19px] font-semibold text-ink tnum">
+                    {formatNumber(s.currentVolume)}
+                    <span className="ml-1.5 text-[11.5px] font-normal text-ink-4">{s.unit}</span>
+                  </p>
+                </div>
+                <TrendPill
+                  trend={mom > 0.75 ? "up" : mom < -0.75 ? "down" : "flat"}
+                  value={mom}
+                  direction="higher-better"
+                  label="MoM"
+                />
+              </div>
+              <div className="mt-3">
+                <Sparkline
+                  values={s.series.filter((x) => x.isActual).map((x) => x.value)}
+                  width={220}
+                  height={34}
+                  color={hueOf(s.id)}
+                />
+              </div>
+              <p className="mt-2 border-t border-line-soft pt-2 text-[11.5px] text-ink-4 tnum">
+                {formatNumber(s.ytdVolume)} YTD · {formatMoney(s.monthTotal)} this month
+              </p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** One sub-service in full: volume, charging, service level, its own KPIs. */
+function SubServiceDetailView({
+  detail,
+  kpis,
+  hue,
+  monthLabel,
+}: {
+  detail: SubServiceDetail;
+  kpis: Kpi[];
+  hue: string;
+  monthLabel: string;
+}) {
+  const mom = detail.prevVolume
+    ? ((detail.currentVolume - detail.prevVolume) / detail.prevVolume) * 100
+    : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <StatTile
+          label={`${detail.unit} — ${monthLabel}`}
+          value={formatNumber(detail.currentVolume)}
+          emphasis
+          accent={hue}
+          delta={
+            <TrendPill
+              trend={mom > 0.75 ? "up" : mom < -0.75 ? "down" : "flat"}
+              value={mom}
+              direction="higher-better"
+              label="MoM"
+            />
+          }
+        />
+        <StatTile label="Year to date" value={formatNumber(detail.ytdVolume)} emphasis caption={detail.unit} />
+        <StatTile
+          label="Contracted rate"
+          value={detail.rate >= 1000 ? formatMoney(detail.rate) : `₹${detail.rate}`}
+          emphasis
+          caption={`per ${detail.unitSingular}`}
+        />
+        <StatTile
+          label="Dedicated capacity"
+          value={`${detail.fteCount} FTE`}
+          emphasis
+          caption={formatMoney(detail.fteAmount)}
+        />
+        <StatTile
+          label="Attributable spend"
+          value={formatMoney(detail.monthTotal)}
+          emphasis
+          caption={`${(detail.shareOfService * 100).toFixed(0)}% of tower`}
+        />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <Card>
+          <CardHeader
+            eyebrow="Volume"
+            title={`${detail.name} — ${detail.unit} per month`}
+            subtitle="Faded columns are forecast."
+          />
+          <ColumnChart
+            data={detail.series.map((s) => ({ label: s.short, value: s.value, isActual: s.isActual }))}
+            format={(n) => formatNumber(n)}
+            height={230}
+            color={hue}
+            valueLabel={detail.unit}
+          />
+        </Card>
+
+        <div className="grid gap-4">
+          <Card>
+            <CardHeader eyebrow="Charging" title="How this sub-service is billed" />
+            <Table>
+              <tbody>
+                <tr>
+                  <Td>
+                    {formatNumber(detail.currentVolume)} {detail.unit}
+                  </Td>
+                  <Td align="right" muted>
+                    × {detail.rate >= 1000 ? formatMoney(detail.rate) : `₹${detail.rate}`}
+                  </Td>
+                  <Td align="right" className="font-medium">
+                    {formatMoney(detail.txnAmount)}
+                  </Td>
+                </tr>
+                <tr>
+                  <Td>{detail.fteCount} FTE</Td>
+                  <Td align="right" muted>
+                    dedicated
+                  </Td>
+                  <Td align="right" className="font-medium">
+                    {formatMoney(detail.fteAmount)}
+                  </Td>
+                </tr>
+                <tr>
+                  <Td className="font-semibold">Total</Td>
+                  <Td />
+                  <Td align="right" className="font-semibold">
+                    {formatMoney(detail.monthTotal)}
+                  </Td>
+                </tr>
+              </tbody>
+            </Table>
+          </Card>
+
+          {detail.sla && (
+            <Card>
+              <CardHeader
+                eyebrow="Service level"
+                title={`${detail.sla.actual.toFixed(1)}% achieved`}
+                action={<StatusPill status={detail.sla.status} size="sm">{detail.sla.label}</StatusPill>}
+              />
+              <BulletGauge
+                actual={detail.sla.actual}
+                target={detail.sla.target}
+                direction="higher-better"
+                color={
+                  detail.sla.status === "bad"
+                    ? "var(--color-bad)"
+                    : detail.sla.status === "warn"
+                      ? "var(--color-warn)"
+                      : "var(--color-good)"
+                }
+                format={(n) => `${n.toFixed(0)}%`}
+                scaleMax={100}
+                scaleMin={Math.max(0, Math.min(detail.sla.actual, detail.sla.target) - 20)}
+              />
+              <div className="mt-4 border-t border-line-soft pt-3">
+                <DataRow label="Weight in tower SLA" value={`${(detail.sla.weight * 100).toFixed(0)}%`} />
+                <DataRow
+                  label="Contribution"
+                  value={(detail.sla.actual * detail.sla.weight).toFixed(2)}
+                  emphasis
+                />
+              </div>
+            </Card>
+          )}
+        </div>
+      </div>
+
+      {kpis.length > 0 && (
+        <Card padded={false}>
+          <div className="p-5">
+            <CardHeader eyebrow="Indicators" title={`${kpis.length} KPIs measured on ${detail.name}`} />
+            <Table>
+              <thead>
+                <tr>
+                  <Th>Indicator</Th>
+                  <Th align="right">Actual</Th>
+                  <Th align="right">Target</Th>
+                  <Th align="center">Trend</Th>
+                  <Th align="center">Status</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {kpis.map((k) => (
+                  <tr key={k.id}>
+                    <Td>{k.name}</Td>
+                    <Td align="right" className="font-medium">
+                      {formatMetric(k.actual, k.unit)}
+                    </Td>
+                    <Td align="right" muted>
+                      {k.direction === "higher-better" ? "≥" : "≤"} {formatMetric(k.target, k.unit)}
+                    </Td>
+                    <Td align="center">
+                      <TrendPill trend={k.trend} value={k.deltaPct} direction={k.direction} />
+                    </Td>
+                    <Td align="center">
+                      <StatusPill status={k.status} size="sm" />
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* KPI overview — distribution, attainment, biggest gaps               */
+/* ------------------------------------------------------------------ */
+
+/** Signed shortfall against target as a % of target. 0 = met or beaten. */
+function shortfallPct(k: Kpi): number {
+  if (!k.target) return 0;
+  const raw =
+    k.direction === "higher-better" ? k.target - k.actual : k.actual - k.target;
+  return Math.max(0, (raw / Math.abs(k.target)) * 100);
+}
+
+export function KpiOverviewPanel({
+  kpis,
+  subServices,
+}: {
+  kpis: Kpi[];
+  subServices: SubServiceDetail[];
+}) {
+  const counts = {
+    good: kpis.filter((k) => k.status === "good").length,
+    warn: kpis.filter((k) => k.status === "warn").length,
+    bad: kpis.filter((k) => k.status === "bad").length,
+  };
+  const total = kpis.length || 1;
+
+  const bands = [
+    { key: "good", label: "On target", value: counts.good, color: "var(--color-good)" },
+    { key: "warn", label: "At risk", value: counts.warn, color: "var(--color-warn)" },
+    { key: "bad", label: "Off target", value: counts.bad, color: "var(--color-bad)" },
+  ].filter((b) => b.value > 0);
+
+  const attainment = subServices
+    .map((s) => {
+      const own = kpis.filter((k) => s.kpiIds.includes(k.id));
+      if (own.length === 0) return null;
+      const onTarget = own.filter((k) => k.status === "good").length;
+      return {
+        key: s.id,
+        label: s.name,
+        sublabel: `${onTarget} of ${own.length} on target`,
+        value: (onTarget / own.length) * 100,
+        color:
+          onTarget === own.length
+            ? "var(--color-good)"
+            : onTarget / own.length >= 0.7
+              ? "var(--color-warn)"
+              : "var(--color-bad)",
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+
+  const gaps = kpis
+    .map((k) => ({ kpi: k, gap: shortfallPct(k) }))
+    .filter((g) => g.gap > 0)
+    .sort((a, b) => b.gap - a.gap)
+    .slice(0, 6);
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-3">
+      <Card>
+        <CardHeader eyebrow="Distribution" title={`${kpis.length} indicators measured`} />
+        <div className="flex h-3.5 w-full gap-[2px] overflow-hidden rounded-full">
+          {bands.map((b) => (
+            <div key={b.key} style={{ width: `${(b.value / total) * 100}%`, background: b.color }} />
+          ))}
+        </div>
+        <ul className="mt-4 space-y-2.5">
+          {bands.map((b) => (
+            <li key={b.key} className="flex items-center gap-2.5">
+              <span className="size-2.5 shrink-0 rounded-full" style={{ background: b.color }} />
+              <span className="min-w-0 flex-1 text-[12.5px] text-ink-2">{b.label}</span>
+              <span className="text-[13px] font-semibold text-ink tnum">{b.value}</span>
+              <span className="w-10 text-right text-[11.5px] text-ink-4 tnum">
+                {((b.value / total) * 100).toFixed(0)}%
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+
+      <Card>
+        <CardHeader eyebrow="Attainment" title="On-target rate by sub-service" />
+        {attainment.length > 0 ? (
+          <HBarList items={attainment} format={(n) => `${n.toFixed(0)}%`} />
+        ) : (
+          <p className="py-6 text-center text-[13px] text-ink-3">No sub-service indicators.</p>
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader eyebrow="Biggest gaps" title="Furthest from target" />
+        {gaps.length > 0 ? (
+          <HBarList
+            items={gaps.map((g) => ({
+              key: g.kpi.id,
+              label: g.kpi.name,
+              sublabel: `${formatMetric(g.kpi.actual, g.kpi.unit)} vs ${formatMetric(
+                g.kpi.target,
+                g.kpi.unit,
+              )}`,
+              value: g.gap,
+              color: g.kpi.status === "bad" ? "var(--color-bad)" : "var(--color-warn)",
+            }))}
+            format={(n) => `${n.toFixed(1)}%`}
+          />
+        ) : (
+          <p className="py-6 text-center text-[13px] text-ink-3">
+            Every indicator is at or beyond its target.
+          </p>
+        )}
+      </Card>
+    </div>
   );
 }

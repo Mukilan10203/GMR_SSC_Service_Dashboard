@@ -9,7 +9,7 @@
 import { buildEntitySnapshot } from "../src/lib/mock/engine";
 import { ENTITIES, SERVICES } from "../src/lib/mock/organisation";
 import { BLUEPRINTS, botLicenceLineId, botTxnLineId } from "../src/lib/mock/rate-cards";
-import { getPeriod } from "../src/lib/mock/calendar";
+import { DEFAULT_PERIOD_ID, getPeriod } from "../src/lib/mock/calendar";
 import { formatMoney, formatNumber } from "../src/lib/format";
 
 let failures = 0;
@@ -36,7 +36,7 @@ console.log("\n[1mSSC Customer Portal — data reconciliation[0m");
 console.log("\n[1m1. Billing reconciles to the rate card[0m");
 
 for (const entity of ENTITIES) {
-  const snap = buildEntitySnapshot(entity.id, "fy2026");
+  const snap = buildEntitySnapshot(entity.id, DEFAULT_PERIOD_ID);
   for (const svc of snap.services) {
     const b = svc.billing;
     const txnFromLines = b.txnLines.reduce((a, l) => a + l.volume * l.rate, 0);
@@ -67,9 +67,9 @@ check(
 /* 2. The worked example from the brief                                */
 /* ================================================================== */
 
-console.log("\n[1m2. The brief's worked example (DIAL, F&A, Nov FY26)[0m");
+console.log("\n[1m2. The brief's worked example (DIAL, F&A, Aug FY27)[0m");
 
-const dial = buildEntitySnapshot("dial", "fy2026");
+const dial = buildEntitySnapshot("dial", DEFAULT_PERIOD_ID);
 const fna = dial.services.find((s) => s.service.id === "fna")!;
 const apLine = fna.billing.txnLines.find((l) => l.id === "fna-ap")!;
 
@@ -331,7 +331,7 @@ check(
   "KPI → issue drill-down is intact",
 );
 
-const ghial = buildEntitySnapshot("ghial", "fy2026");
+const ghial = buildEntitySnapshot("ghial", DEFAULT_PERIOD_ID);
 const ghialHr = ghial.services.find((s) => s.service.id === "hrops")!;
 check(
   "GHIAL HR Ops SLA is materially below DIAL's (different entity, different story)",
@@ -350,16 +350,16 @@ check(
 
 console.log("\n[1m9. The model is deterministic[0m");
 
-const a1 = JSON.stringify(buildEntitySnapshot("ghial", "fy2026"));
-const a2 = JSON.stringify(buildEntitySnapshot("ghial", "fy2026"));
+const a1 = JSON.stringify(buildEntitySnapshot("ghial", DEFAULT_PERIOD_ID));
+const a2 = JSON.stringify(buildEntitySnapshot("ghial", DEFAULT_PERIOD_ID));
 check("Rebuilding a snapshot produces identical output", a1 === a2, `${a1.length} chars`);
 
 /* ================================================================== */
 /* Headline summary                                                    */
 /* ================================================================== */
 
-const period = getPeriod("fy2026");
-console.log("\n[1mHeadline figures — Delhi International Airport, FY 2026[0m");
+const period = getPeriod(DEFAULT_PERIOD_ID);
+console.log("\n[1mHeadline figures — Delhi International Airport, FY 2027[0m");
 console.log(`  Period                ${period.range} (${period.actualMonthCount} months actual)`);
 console.log(`  Total SSC billing     ${formatMoney(dial.billing.fyForecast)} (full-year forecast)`);
 console.log(`  YTD billing           ${formatMoney(dial.billing.ytd)}`);

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePortalData } from "@/components/portal/usePortalData";
 import { PageHeader } from "@/components/portal/blocks";
@@ -17,13 +18,60 @@ import {
   serviceColor,
 } from "@/components/ui/primitives";
 import { ColumnChart, DonutChart, HBarList, StackedColumns, TrendChart } from "@/components/charts";
-import { formatMoney, formatMoneyAxis, formatNumber, formatPercent } from "@/lib/format";
+import { cx, formatMoney, formatMoneyAxis, formatNumber, formatPercent } from "@/lib/format";
+
+/** Month-window presets. `from`/`to` are inclusive indices into the fiscal year. */
+function rangePresets(actualCount: number) {
+  const last = Math.max(0, actualCount - 1);
+  return [
+    { id: "ytd", label: "Year to date", from: 0, to: last },
+    { id: "l3", label: "Last 3 months", from: Math.max(0, last - 2), to: last },
+    { id: "l6", label: "Last 6 months", from: Math.max(0, last - 5), to: last },
+    { id: "h1", label: "H1 (Apr–Sep)", from: 0, to: 5 },
+    { id: "h2", label: "H2 (Oct–Mar)", from: 6, to: 11 },
+    { id: "fy", label: "Full year", from: 0, to: 11 },
+  ];
+}
 
 export default function BillingPage() {
   const { snapshot } = usePortalData();
+  const [rangeId, setRangeId] = useState("ytd");
   if (!snapshot) return null;
 
   const { billing, services, period, entity } = snapshot;
+
+  const presets = rangePresets(period.actualMonthCount);
+  const range = presets.find((r) => r.id === rangeId) ?? presets[0];
+  const inRange = <T,>(xs: T[]) => xs.slice(range.from, range.to + 1);
+
+  const rangeMonths = inRange(billing.monthly);
+  const rangeTotal = rangeMonths.reduce((a, m) => a + m.total, 0);
+  const rangeBudget = rangeMonths.reduce((a, m) => a + m.budget, 0);
+  const rangeActualMonths = rangeMonths.filter((m) => m.isActual);
+  const rangeAvg = rangeMonths.length ? rangeTotal / rangeMonths.length : 0;
+  const peakMonth = [...rangeMonths].sort((a, b) => b.total - a.total)[0];
+  const lowMonth = [...rangeMonths].sort((a, b) => a.total - b.total)[0];
+  const rangeVariancePct = rangeBudget ? ((rangeTotal - rangeBudget) / rangeBudget) * 100 : 0;
+  const rangeTxn = rangeMonths.reduce((a, m) => a + m.txn, 0);
+  const rangeFte = rangeMonths.reduce((a, m) => a + m.fte, 0);
+
+  // Running total against budget — how the year is tracking, not just this month.
+  let runTotal = 0;
+  let runBudget = 0;
+  const cumulative = rangeMonths.map((m) => {
+    runTotal += m.total;
+    runBudget += m.budget;
+    return { label: m.short, value: runTotal, isActual: m.isActual, budget: runBudget };
+  });
+
+  const rangeByService = services
+    .map((s) => ({
+      key: s.service.id,
+      label: s.service.name,
+      value: inRange(s.billing.monthly).reduce((a, m) => a + m.total, 0),
+      color: serviceColor(s.service.id),
+    }))
+    .sort((a, b) => b.value - a.value);
 
   const biggestService = [...services].sort((a, b) => b.billing.fyForecast - a.billing.fyForecast)[0];
   const biggestMover = [...services].sort(
@@ -47,13 +95,70 @@ export default function BillingPage() {
       <PageHeader
         eyebrow="Billing"
         title="What you are paying, and why"
-        subtitle={
-          <>
-            Every rupee the SSC charges {entity.name} traces to a counted transaction or a named role.
-            This page explains the total, the movement and the variance against budget.
-          </>
+        actions={
+          <div className="flex flex-wrap gap-1.5">
+            {presets.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => setRangeId(r.id)}
+                className={cx(
+                  "rounded-md border px-3 py-1.5 text-[12.5px] font-medium transition-colors",
+                  r.id === rangeId
+                    ? "border-accent-line bg-accent-soft text-accent-strong"
+                    : "border-line bg-surface text-ink-3 hover:border-line-strong hover:text-ink-2",
+                )}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
         }
       />
+
+      {/* ============================================================ */}
+      {/* Selected range                                               */}
+      {/* ============================================================ */}
+      <section className="mb-8">
+        <SectionHeading
+          title={`${range.label} · ${rangeMonths[0]?.short} – ${rangeMonths[rangeMonths.length - 1]?.short}`}
+        />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <StatTile
+            label="Billed in range"
+            value={formatMoney(rangeTotal)}
+            emphasis
+            caption={`${rangeActualMonths.length} of ${rangeMonths.length} months closed`}
+          />
+          <StatTile
+            label="Budget in range"
+            value={formatMoney(rangeBudget)}
+            emphasis
+            caption={`${formatMoney(Math.abs(rangeTotal - rangeBudget))} ${
+              rangeTotal >= rangeBudget ? "over" : "under"
+            }`}
+          />
+          <StatTile
+            label="Variance"
+            value={`${rangeVariancePct >= 0 ? "+" : "−"}${Math.abs(rangeVariancePct).toFixed(1)}%`}
+            emphasis
+            status={Math.abs(rangeVariancePct) < 5 ? "good" : "warn"}
+          />
+          <StatTile label="Average month" value={formatMoney(rangeAvg)} emphasis />
+          <StatTile
+            label="Peak month"
+            value={formatMoney(peakMonth?.total ?? 0)}
+            emphasis
+            caption={peakMonth?.short}
+          />
+          <StatTile
+            label="Lowest month"
+            value={formatMoney(lowMonth?.total ?? 0)}
+            emphasis
+            caption={lowMonth?.short}
+          />
+        </div>
+      </section>
 
       {/* ============================================================ */}
       <section className="mb-8">
@@ -124,10 +229,9 @@ export default function BillingPage() {
           <CardHeader
             eyebrow="Monthly billing"
             title="Billing against budget across the year"
-            subtitle={billing.narrative}
           />
           <TrendChart
-            data={billing.monthly.map((m) => ({
+            data={rangeMonths.map((m) => ({
               label: m.short,
               value: m.total,
               isActual: m.isActual,
@@ -141,26 +245,71 @@ export default function BillingPage() {
         </Card>
 
         <Card>
-          <CardHeader
-            eyebrow="Composition"
-            title="Full-year billing by service"
-            subtitle={`${biggestService.service.name} is the largest single service at ${(
-              biggestService.billing.mix * 100
-            ).toFixed(0)}% of your spend.`}
-          />
+          <CardHeader eyebrow="Composition" title={`Billing by service · ${range.label}`} />
           <DonutChart
-            segments={services.map((s) => ({
-              key: s.service.id,
-              label: s.service.code,
-              value: s.billing.fyForecast,
-              color: serviceColor(s.service.id),
+            segments={rangeByService.map((r) => ({
+              key: r.key,
+              label: services.find((s) => s.service.id === r.key)?.service.code ?? r.key,
+              value: r.value,
+              color: r.color,
             }))}
             format={(n) => formatMoney(n)}
             size={160}
-            centerValue={formatMoney(billing.fyForecast)}
-            centerLabel="Full year"
+            centerValue={formatMoney(rangeTotal)}
+            centerLabel={range.label}
           />
         </Card>
+      </section>
+
+      {/* ============================================================ */}
+      {/* Cumulative + split                                           */}
+      {/* ============================================================ */}
+      <section className="mb-8 grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+        <Card>
+          <CardHeader
+            eyebrow="Running total"
+            title="Cumulative billed against cumulative budget"
+            subtitle="Faded points are forecast."
+          />
+          <TrendChart
+            data={cumulative}
+            format={(n) => `₹${formatMoneyAxis(n)}`}
+            height={230}
+            valueLabel="Cumulative billed"
+            budgetLabel="Cumulative budget"
+          />
+        </Card>
+
+        <div className="grid gap-4">
+          <Card>
+            <CardHeader eyebrow={range.label} title="Transaction versus capacity" />
+            <HBarList
+              items={[
+                {
+                  key: "txn",
+                  label: "Transaction-based",
+                  sublabel: "volume × contracted rate",
+                  value: rangeTxn,
+                  color: "var(--color-accent)",
+                },
+                {
+                  key: "fte",
+                  label: "FTE-based",
+                  sublabel: "dedicated capacity",
+                  value: rangeFte,
+                  color: "var(--color-svc-hrops)",
+                },
+              ]}
+              format={(n) => formatMoney(n)}
+              showShare
+            />
+          </Card>
+
+          <Card>
+            <CardHeader eyebrow={range.label} title="Spend by service" />
+            <HBarList items={rangeByService} format={(n) => formatMoney(n)} showShare />
+          </Card>
+        </div>
       </section>
 
       {/* ============================================================ */}
@@ -169,17 +318,17 @@ export default function BillingPage() {
       <section className="mb-8">
         <SectionHeading
           title="How the mix changes through the year"
-          subtitle="Each month's fee split by service tower. Faded columns are forecast."
+          subtitle="Faded columns are forecast."
         />
         <Card>
           <StackedColumns
-            labels={billing.monthly.map((m) => m.short)}
-            actualFlags={billing.monthly.map((m) => m.isActual)}
+            labels={rangeMonths.map((m) => m.short)}
+            actualFlags={rangeMonths.map((m) => m.isActual)}
             series={services.map((s) => ({
               key: s.service.id,
               label: s.service.name,
               color: serviceColor(s.service.id),
-              values: s.billing.monthly.map((m) => m.total),
+              values: inRange(s.billing.monthly).map((m) => m.total),
             }))}
             format={(n) => `₹${formatMoneyAxis(n)}`}
             height={280}
@@ -193,7 +342,6 @@ export default function BillingPage() {
       <section className="mb-8">
         <SectionHeading
           title={`Why billing moved ${billing.momPct >= 0 ? "up" : "down"} ${Math.abs(billing.momPct).toFixed(1)}% this month`}
-          subtitle="The specific charge lines behind the movement, ranked by rupee impact across every service."
         />
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
           <Card>
@@ -345,7 +493,6 @@ export default function BillingPage() {
             <CardHeader
               eyebrow="Detail"
               title="Billing by service"
-              subtitle="Select any service to see the line-by-line calculation behind its fee."
             />
             <Table>
               <thead>
@@ -435,7 +582,6 @@ export default function BillingPage() {
       <section>
         <SectionHeading
           title={`${billing.currentMonthLabel} in full`}
-          subtitle="Every charge line the SSC has raised this month, across all services."
         />
         <Card padded={false}>
           <div className="p-5">

@@ -22,13 +22,20 @@ import type {
   ServiceId,
   ServiceSla,
   ServiceSnapshot,
+  SubServiceDetail,
   SlaComponent,
   Status,
   Trend,
   TxnChargeLine,
 } from "../domain/types";
 import { gradeAgainstTarget, pctChange, trendFrom } from "../format";
-import { DEMO_AS_OF, getPeriod, getPeriodDefinition, QUARTERS } from "./calendar";
+import {
+  DEMO_AS_OF,
+  getPeriod,
+  getPeriodDefinition,
+  getPriorPeriodId,
+  QUARTERS,
+} from "./calendar";
 import { ENTITIES, LOCATIONS, SERVICE_MAP, SERVICES } from "./organisation";
 import {
   AVG_INVOICE_VALUE,
@@ -146,9 +153,17 @@ function buildVolumes(entity: Entity, serviceId: ServiceId, period: Period): Ser
 
   const txn: Record<string, number[]> = {};
   for (const line of bp.txn) {
-    txn[line.id] = bp.seasonality.map((s) => {
+    // Each charge line carries the tower's seasonality plus its own gentle
+    // phase-shifted wave, so sub-services move independently rather than in
+    // lockstep. The wave is normalised at the anchor month, which keeps the
+    // reporting-month volume exactly on its contracted base figure.
+    const phase = (hash(`phase-${line.id}`) % 12) / 12;
+    const wave = (i: number) => 1 + 0.055 * Math.sin(2 * Math.PI * (i / 12 + phase));
+    const anchor = wave(currentIndex);
+
+    txn[line.id] = bp.seasonality.map((s, i) => {
       if (line.fixed) return line.baseVolume;
-      const v = line.baseVolume * entity.scale * s * factor;
+      const v = line.baseVolume * entity.scale * s * factor * (wave(i) / anchor);
       return Math.max(1, Math.round(v));
     });
   }
@@ -889,12 +904,16 @@ function buildCx(
   const passives = Math.max(0, respondents - promoters - detractors);
   const nps = Math.round(((promoters - detractors) / respondents) * 100);
 
-  // Deteriorating accounts show NPS falling into the current quarter.
+  // NPS is surveyed quarterly, so only the quarters the period has reached
+  // are on the board; the one in flight is flagged partial.
+  const quartersElapsed = Math.max(1, Math.ceil(period.actualMonthCount / 3));
   const declining = entity.opsDelta < -0.8;
-  const shape = declining ? [9, 4, 0] : [-7, -3, 0];
-  const npsQuarters: NpsQuarter[] = QUARTERS.slice(0, 3).map((q, i) => {
-    const score = nps + shape[i];
-    const r = Math.max(12, Math.round(respondents * (i === 2 ? 0.72 : 0.94)));
+  const npsQuarters: NpsQuarter[] = QUARTERS.slice(0, quartersElapsed).map((q, i) => {
+    const stepsFromNow = quartersElapsed - 1 - i;
+    // Deteriorating accounts show NPS falling into the current quarter.
+    const score = nps + stepsFromNow * (declining ? 4.5 : -3.5);
+    const isLast = i === quartersElapsed - 1;
+    const r = Math.max(12, Math.round(respondents * (isLast ? 0.72 : 0.94)));
     const dShare = clamp(0.3 - score / 400, 0.04, 0.45);
     const pShare = clamp(dShare + score / 100, 0.05, 0.92);
     const p = Math.round(r * pShare);
@@ -907,7 +926,7 @@ function buildCx(
       passives: Math.max(0, r - p - d),
       detractors: d,
       respondents: r,
-      isPartial: i === 2 && period.isCurrent,
+      isPartial: isLast && period.isCurrent,
     };
   });
 
@@ -925,7 +944,8 @@ function buildCx(
     csatDelta: round2(entity.opsDelta * 0.06 + (declining ? -0.2 : 0.1)),
     csatByService,
     nps,
-    npsDelta: npsQuarters.length >= 2 ? nps - npsQuarters[1].score : 0,
+    npsDelta:
+      npsQuarters.length >= 2 ? nps - npsQuarters[npsQuarters.length - 2].score : 0,
     npsQuarters,
     respondents,
     openComplaints: Math.max(openComplaints, feedback.filter((f) => f.type === "complaint").length),
@@ -1260,7 +1280,7 @@ function buildOverviewMetrics(
       };
     }
 
-    /* ---- HR Ops: TA · Payroll · L&D · Core HR ---------------------- */
+    /* ---- HR Ops: TA · Payroll · L&D -------------------------------- */
     case "hrops": {
       const openPositions = stockValue("hrops", "openPositions", entity, period);
       const inProgress = stockValue("hrops", "positionsInProgress", entity, period);
@@ -1281,7 +1301,6 @@ function buildOverviewMetrics(
           slaMetric(),
           { id: "lnd", label: "Learning enrolments", value: v("hrops-lnd"), format: "number", caption: monthCaption },
           { id: "lnd-completion", label: "Learning completion rate", value: ctx.trainingCompletionRate, format: "percent", direction: "higher-better" },
-          { id: "core", label: "Lifecycle & helpdesk cases", value: v("hrops-core"), format: "number", caption: monthCaption },
           { id: "candidate", label: "Candidate feedback", value: ctx.candidateExperience, format: "score", direction: "higher-better" },
           { id: "offers", label: "Offers pending acceptance", value: stockValue("hrops", "offersPending", entity, period), format: "number" },
         ],
@@ -1587,41 +1606,8 @@ function buildAttention(
         metricLabel: "NPS",
         actual: `${latest.score >= 0 ? "+" : ""}${latest.score}`,
         target: `${previous.score >= 0 ? "+" : ""}${previous.score}`,
-        href: "/performance",
-        action: "Review customer experience",
-      });
-    }
-  }
-
-  if (automation) {
-    const trouble = automation.bots.filter((b) => b.status === "warning" || b.status === "failed");
-    if (trouble.length > 0) {
-      items.push({
-        id: "att-bots",
-        severity: automation.bots.some((b) => b.status === "failed") ? "critical" : "warning",
-        kind: "automation-failure",
-        title: `${trouble.length} automation${trouble.length > 1 ? "s are" : " is"} reporting errors`,
-        detail: `${trouble.map((b) => `${b.name} (${SERVICE_MAP[b.serviceId].code})`).join(", ")} ${trouble.length > 1 ? "are" : "is"} running below the 97% job success threshold. Affected work has reverted to manual processing.`,
-        serviceId: trouble[0].serviceId,
-        entityId: entity.id,
-        metricLabel: "Bots requiring attention",
-        actual: String(trouble.length),
-        href: "/automation",
-        action: "Open control tower",
-      });
-    }
-
-    if (automation.pipeline.length > 0) {
-      const hours = sum(automation.pipeline.map((p) => p.estHoursMonth));
-      items.push({
-        id: "att-opportunity",
-        severity: "info",
-        kind: "opportunity",
-        title: `${automation.pipeline.length} automations in the pipeline could release a further ${hours.toLocaleString("en-IN")} hours a month`,
-        detail: `Estimated additional saving of ${Math.round((hours * automation.blendedHourlyCost) / 1_00_000)} lakh per month once all four are live. Two are scheduled for December.`,
-        entityId: entity.id,
-        href: "/automation",
-        action: "Review pipeline",
+        href: "/issues#feedback",
+        action: "Review customer feedback",
       });
     }
   }
@@ -1651,8 +1637,8 @@ function formatKpiValue(k: Kpi): string {
 
 /** FY total for the prior year — used for the year-on-year comparison. */
 function priorYearTotal(entity: Entity, periodId: string, services: ServiceId[]): number {
-  const prior = getPeriodDefinition(periodId === "fy2026" ? "fy2025" : "fy2024");
-  const priorPeriod = getPeriod(prior.id);
+  const priorId = getPriorPeriodId(periodId) ?? periodId;
+  const priorPeriod = getPeriod(priorId);
   return sum(
     services.map((s) => {
       const v = buildVolumes(entity, s, priorPeriod);
@@ -1705,6 +1691,61 @@ export function buildEntitySnapshot(
   const feedback = buildFeedback(entity, period, services, mix);
 
   /* 5 — service snapshots. */
+  /**
+   * Sub-service drill-down. Each sub-service owns the charge line that
+   * shares its id and the FTE line named `<service>-fte-<suffix>`, so the
+   * attributable spend below is the same volume × rate the billing tab
+   * shows — not a re-derived number.
+   */
+  const buildSubServices = (
+    s: ServiceId,
+    vols: ServiceVolumes,
+    sla: ServiceSla,
+    kpis: Kpi[],
+  ): SubServiceDetail[] => {
+    const bp = BLUEPRINTS[s];
+    const def = SERVICE_MAP[s];
+    const rows = def.subServices.map((sub) => {
+      const txnSpec = bp.txn.find((l) => l.id === sub.id);
+      const suffix = sub.id.startsWith(`${s}-`) ? sub.id.slice(s.length + 1) : sub.id;
+      const fteSpec = bp.fte.find((l) => l.id === `${s}-fte-${suffix}`);
+
+      const volSeries = txnSpec ? vols.txn[txnSpec.id] : undefined;
+      const series = period.months.map((mo, i) => ({
+        short: mo.short,
+        value: volSeries?.[i] ?? 0,
+        isActual: mo.isActual,
+      }));
+      const currentVolume = volSeries?.[vols.currentIndex] ?? 0;
+      const fteCount = fteSpec ? (vols.fte[fteSpec.id]?.[vols.currentIndex] ?? 0) : 0;
+      const txnAmount = currentVolume * (txnSpec?.rate ?? 0);
+      const fteAmount = fteCount * (fteSpec?.ratePerFte ?? 0);
+
+      return {
+        id: sub.id,
+        code: sub.code,
+        name: sub.name,
+        series,
+        unit: txnSpec?.unitPlural ?? "items",
+        unitSingular: txnSpec?.unit ?? "item",
+        currentVolume,
+        prevVolume: volSeries?.[vols.prevIndex] ?? 0,
+        ytdVolume: sum((volSeries ?? []).slice(0, vols.actualCount)),
+        rate: txnSpec?.rate ?? 0,
+        txnAmount,
+        fteCount,
+        fteAmount,
+        monthTotal: txnAmount + fteAmount,
+        shareOfService: 0,
+        sla: sla.components.find((c) => c.id === sub.slaComponentId),
+        kpiIds: kpis.filter((k) => k.subServiceId === sub.id).map((k) => k.id),
+      };
+    });
+    const attributable = sum(rows.map((r) => r.monthTotal)) || 1;
+    for (const r of rows) r.shareOfService = r.monthTotal / attributable;
+    return rows;
+  };
+
   const serviceSnapshots: ServiceSnapshot[] = services.map((s) => {
     const vols = volumes[s];
     const sla = slas[s];
@@ -1742,6 +1783,7 @@ export function buildEntitySnapshot(
       billing,
       sla,
       kpis,
+      subServices: buildSubServices(s, vols, sla, kpis),
       issueIds: serviceIssues.map((i) => i.id),
       feedbackIds: serviceFeedback.map((f) => f.id),
       utilisation,

@@ -74,7 +74,7 @@ but neither is a sixth service.
 2. **Overview** — executive summary, *Attention required*, service cards, billing,
    customer experience, the value automation and analytics are creating
 3. **F&A → Overview** — the five sub-services with their individual service
-   levels, then 10,240 invoices, ₹18.40 Cr invoice value, 4.2-day processing
+   levels, then 10,240 invoices, ₹18.4 Cr invoice value, 4.2-day processing
    time, 3.4% rejection rate, 97.2% SLA
 4. **F&A → Billing** — *"Why you are charged ₹68 L this month"*: transaction
    charging (10,240 invoices × ₹100 = ₹10.24 L) and FTE charging side by side,
@@ -134,8 +134,8 @@ Concretely, and all verifiable via `npm run verify:data`:
 - **It is deterministic.** No `Math.random()` anywhere — variation comes from a
   seeded hash, so the demo tells the same story every run.
 
-Reporting date is fixed at **30 Nov 2025**, eight months into FY 2026
-(Apr 2025 – Mar 2026). That is what allows YTD actuals, a full-year forecast and
+Reporting date is fixed at **31 Aug 2026**, five months into FY 2027
+(Apr 2026 – Mar 2027). That is what allows YTD actuals, a full-year forecast and
 budget variance to coexist honestly.
 
 ---

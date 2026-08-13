@@ -1,15 +1,15 @@
 import type { FiscalMonth, Period } from "../domain/types";
 
 /**
- * Indian fiscal calendar: FY 2026 runs Apr 2025 → Mar 2026.
+ * Indian fiscal calendar: FY 2027 runs Apr 2026 → Mar 2027.
  *
  * The prototype has a fixed "as of" date so every screen tells the same
- * story on every run. FY 2026 is in flight — eight months closed, four
+ * story on every run. FY 2027 is in flight — five months closed, seven
  * months forecast — which is what lets the portal show YTD actuals
  * against a full-year forecast the way a real CFO view does.
  */
-export const DEMO_AS_OF = "2025-11-30";
-export const DEMO_AS_OF_LABEL = "30 Nov 2025";
+export const DEMO_AS_OF = "2026-08-31";
+export const DEMO_AS_OF_LABEL = "31 Aug 2026";
 
 const MONTH_NAMES = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -33,13 +33,22 @@ export interface PeriodDefinition {
 
 export const PERIOD_DEFINITIONS: PeriodDefinition[] = [
   {
+    id: "fy2027",
+    label: "FY 2027",
+    short: "FY27",
+    startYear: 2026,
+    actualMonthCount: 5,
+    volumeFactor: 1.0,
+    isCurrent: true,
+  },
+  {
     id: "fy2026",
     label: "FY 2026",
     short: "FY26",
     startYear: 2025,
-    actualMonthCount: 8,
-    volumeFactor: 1.0,
-    isCurrent: true,
+    actualMonthCount: 12,
+    volumeFactor: 0.831,
+    isCurrent: false,
   },
   {
     id: "fy2025",
@@ -47,21 +56,12 @@ export const PERIOD_DEFINITIONS: PeriodDefinition[] = [
     short: "FY25",
     startYear: 2024,
     actualMonthCount: 12,
-    volumeFactor: 0.831,
-    isCurrent: false,
-  },
-  {
-    id: "fy2024",
-    label: "FY 2024",
-    short: "FY24",
-    startYear: 2023,
-    actualMonthCount: 12,
     volumeFactor: 0.676,
     isCurrent: false,
   },
 ];
 
-export const DEFAULT_PERIOD_ID = "fy2026";
+export const DEFAULT_PERIOD_ID = "fy2027";
 
 function buildMonths(def: PeriodDefinition): FiscalMonth[] {
   return FISCAL_TO_CALENDAR.map((cm, i) => {
