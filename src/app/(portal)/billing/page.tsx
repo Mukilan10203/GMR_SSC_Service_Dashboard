@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePortalData } from "@/components/portal/usePortalData";
-import { PageHeader } from "@/components/portal/blocks";
+import { MonthlyTrendCard, PageHeader } from "@/components/portal/blocks";
 import {
   Badge,
   Card,
@@ -17,7 +17,7 @@ import {
   TrendPill,
   serviceColor,
 } from "@/components/ui/primitives";
-import { ColumnChart, DonutChart, HBarList, StackedColumns, TrendChart } from "@/components/charts";
+import { DonutChart, HBarList, StackedColumns, TrendChart } from "@/components/charts";
 import { cx, formatMoney, formatMoneyAxis, formatNumber, formatPercent } from "@/lib/format";
 
 /** Month-window presets. `from`/`to` are inclusive indices into the fiscal year. */
@@ -58,10 +58,19 @@ export default function BillingPage() {
   // Running total against budget — how the year is tracking, not just this month.
   let runTotal = 0;
   let runBudget = 0;
+  let runPrior = 0;
+  const hasPrior = rangeMonths.some((m) => m.prior != null);
   const cumulative = rangeMonths.map((m) => {
     runTotal += m.total;
     runBudget += m.budget;
-    return { label: m.short, value: runTotal, isActual: m.isActual, budget: runBudget };
+    runPrior += m.prior ?? 0;
+    return {
+      label: m.short,
+      value: runTotal,
+      isActual: m.isActual,
+      budget: runBudget,
+      prior: hasPrior ? runPrior : undefined,
+    };
   });
 
   const rangeByService = services
@@ -225,24 +234,20 @@ export default function BillingPage() {
       {/* Trend + composition                                          */}
       {/* ============================================================ */}
       <section className="mb-8 grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <Card>
-          <CardHeader
-            eyebrow="Monthly billing"
-            title="Billing against budget across the year"
-          />
-          <TrendChart
-            data={rangeMonths.map((m) => ({
-              label: m.short,
-              value: m.total,
-              isActual: m.isActual,
-              budget: m.budget,
-            }))}
-            format={(n) => `₹${formatMoneyAxis(n)}`}
-            height={250}
-            valueLabel="Billed"
-            budgetLabel="Budget"
-          />
-        </Card>
+        <MonthlyTrendCard
+          eyebrow="Monthly billing"
+          title="Billing against budget across the year"
+          data={rangeMonths.map((m) => ({
+            label: m.short,
+            value: m.total,
+            isActual: m.isActual,
+            budget: m.budget,
+            prior: m.prior,
+          }))}
+          format={(n) => `₹${formatMoneyAxis(n)}`}
+          height={250}
+          valueLabel="Billed"
+        />
 
         <Card>
           <CardHeader eyebrow="Composition" title={`Billing by service · ${range.label}`} />
@@ -265,20 +270,13 @@ export default function BillingPage() {
       {/* Cumulative + split                                           */}
       {/* ============================================================ */}
       <section className="mb-8 grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <Card>
-          <CardHeader
-            eyebrow="Running total"
-            title="Cumulative billed against cumulative budget"
-            subtitle="Faded points are forecast."
-          />
-          <TrendChart
-            data={cumulative}
-            format={(n) => `₹${formatMoneyAxis(n)}`}
-            height={230}
-            valueLabel="Cumulative billed"
-            budgetLabel="Cumulative budget"
-          />
-        </Card>
+        <MonthlyTrendCard
+          eyebrow="Running total"
+          title="Cumulative billed against cumulative budget"
+          data={cumulative}
+          format={(n) => `₹${formatMoneyAxis(n)}`}
+          valueLabel="Cumulative billed"
+        />
 
         <div className="grid gap-4">
           <Card>
@@ -467,7 +465,7 @@ export default function BillingPage() {
             title="Billing by quarter"
             subtitle="Faded columns include forecast months."
           />
-          <ColumnChart
+          <TrendChart
             data={billing.quarters.map((q) => ({
               label: q.label,
               value: q.total,

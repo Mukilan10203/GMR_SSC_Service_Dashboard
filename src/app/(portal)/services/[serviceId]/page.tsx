@@ -4,12 +4,13 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { usePortalData } from "@/components/portal/usePortalData";
-import { PageHeader, MetricGrid } from "@/components/portal/blocks";
+import { MetricGrid, MonthlyTrendCard, PageHeader } from "@/components/portal/blocks";
 import {
   BillingDrivers,
   BillingTrend,
   ChargingModel,
   CompletionCard,
+  KpiDetailDrawer,
   KpiGroupSection,
   KpiOverviewPanel,
   SubServiceExplorer,
@@ -29,9 +30,10 @@ import {
   TrendPill,
   serviceColor,
 } from "@/components/ui/primitives";
-import { BulletGauge, ColumnChart } from "@/components/charts";
-import type { Issue, ServiceId, ServiceSnapshot } from "@/lib/domain/types";
+import { BulletGauge } from "@/components/charts";
+import type { Issue, Kpi, ServiceId, ServiceSnapshot } from "@/lib/domain/types";
 import { LOCKED_SERVICE_IDS } from "@/lib/mock/organisation";
+import { getPriorPeriodId, listPeriods } from "@/lib/mock/calendar";
 import { cx, formatMoney, formatNumber, formatPercent } from "@/lib/format";
 
 const TABS = [
@@ -57,6 +59,7 @@ function ServiceDetail() {
   const router = useRouter();
   const { snapshot } = usePortalData();
   const [openIssue, setOpenIssue] = useState<Issue | null>(null);
+  const [openKpi, setOpenKpi] = useState<Kpi | null>(null);
 
   const serviceId = params.serviceId as ServiceId;
   const tab = ((search.get("tab") as TabId) ?? "overview") as TabId;
@@ -113,6 +116,9 @@ function ServiceDetail() {
     kpis: service.kpis.filter((k) => k.subServiceId === sub.id),
     bots: serviceBots.filter((b) => b.subServiceId === sub.id).length,
   }));
+
+  const priorPeriodLabel =
+    listPeriods().find((p) => p.id === getPriorPeriodId(snapshot.period.id))?.label ?? "Prior year";
 
   const setTab = (next: TabId) => {
     router.replace(next === "overview" ? `/services/${def.id}` : `/services/${def.id}?tab=${next}`, {
@@ -284,24 +290,19 @@ function ServiceDetail() {
           />
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-            <Card>
-              <CardHeader
-                eyebrow="Tower volume"
-                title={service.activityChart.title}
-                subtitle="Faded columns are forecast."
-              />
-              <ColumnChart
-                data={service.activityChart.series.map((x) => ({
-                  label: x.short,
-                  value: x.value,
-                  isActual: x.isActual,
-                }))}
-                format={(n) => formatNumber(n)}
-                height={230}
-                color={color}
-                valueLabel={service.activityChart.unit}
-              />
-            </Card>
+            <MonthlyTrendCard
+              eyebrow="Tower volume"
+              title={service.activityChart.title}
+              data={service.activityChart.series.map((x) => ({
+                label: x.short,
+                value: x.value,
+                isActual: x.isActual,
+                prior: x.prior,
+              }))}
+              format={(n) => formatNumber(n)}
+              color={color}
+              valueLabel={service.activityChart.unit}
+            />
 
             <div className="grid gap-4">
               <CompletionCard
@@ -443,6 +444,7 @@ function ServiceDetail() {
                   feedback={feedback}
                   color={color}
                   defaultOpen={i === 0}
+                  onOpenKpi={setOpenKpi}
                 />
               ))}
             </div>
@@ -509,6 +511,16 @@ function ServiceDetail() {
           <FeedbackList feedback={feedback} title="What your people are saying about this service" />
         </div>
       )}
+
+      <KpiDetailDrawer
+        kpi={openKpi}
+        issues={issues}
+        feedback={feedback}
+        color={color}
+        periodLabel={snapshot.period.label}
+        priorPeriodLabel={priorPeriodLabel}
+        onClose={() => setOpenKpi(null)}
+      />
 
       <IssueDrawer
         issue={openIssue}

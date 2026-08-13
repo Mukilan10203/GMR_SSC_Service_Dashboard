@@ -10,6 +10,7 @@ import { downloadReport } from "./export";
 import { cx, formatMoney } from "@/lib/format";
 import { lockedServicesFor, SERVICE_MAP } from "@/lib/mock/organisation";
 import { DEMO_AS_OF_LABEL } from "@/lib/mock/calendar";
+import type { EntitySnapshot } from "@/lib/domain/types";
 import { serviceColor, StatusDot } from "@/components/ui/primitives";
 import {
   IconAnalytics,
@@ -147,7 +148,8 @@ function Select({
 /* ------------------------------------------------------------------ */
 
 function ScopeControls() {
-  const { entityId, periodId, setEntity, setPeriod } = useSession();
+  const { entityId, periodId, monthIndex, setEntity, setPeriod, setMonthIndex } = useSession();
+  const { snapshot } = usePortalData();
   const scope = useUserScope();
   const [locationId, setLocationId] = useState<string>("");
 
@@ -206,7 +208,50 @@ function ScopeControls() {
         }))}
         onChange={setPeriod}
       />
+
+      {snapshot && <MonthSelect snapshot={snapshot} value={monthIndex} onChange={setMonthIndex} />}
     </div>
+  );
+}
+
+/**
+ * Which closed month the portal is read at. "Latest" tracks the most recent
+ * close; picking an earlier month re-cuts every figure as at that month end,
+ * so later months become forecast.
+ */
+function MonthSelect({
+  snapshot,
+  value,
+  onChange,
+}: {
+  snapshot: EntitySnapshot;
+  value: number | null;
+  onChange: (monthIndex: number | null) => void;
+}) {
+  // Only months that have closed in the underlying year can be selected.
+  const closedCount = snapshot.period.isCurrent
+    ? Math.max(snapshot.period.actualMonthCount, value != null ? value + 1 : 0)
+    : 12;
+  const selectable = snapshot.period.months.slice(0, Math.max(1, closedCount));
+  const latest = selectable[selectable.length - 1];
+
+  return (
+    <Select
+      label="Month"
+      value={value == null ? "latest" : String(value)}
+      minWidth={148}
+      options={[
+        { id: "latest", label: `Latest — ${latest?.short ?? ""}`, hint: "Most recent close" },
+        ...selectable
+          .map((m) => ({
+            id: String(m.index),
+            label: m.label,
+            hint: `Q${m.quarter} · as at ${m.label} close`,
+          }))
+          .reverse(),
+      ]}
+      onChange={(id) => onChange(id === "latest" ? null : Number(id))}
+    />
   );
 }
 

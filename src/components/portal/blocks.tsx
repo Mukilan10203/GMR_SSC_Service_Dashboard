@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type {
@@ -13,13 +15,14 @@ import { cx, formatMetric, formatMoney } from "@/lib/format";
 import {
   Badge,
   Card,
+  CardHeader,
   ProgressBar,
   ServiceGlyph,
   serviceColor,
   StatusDot,
   StatusPill,
 } from "@/components/ui/primitives";
-import { Sparkline } from "@/components/charts";
+import { Sparkline, TrendChart } from "@/components/charts";
 import { IconChevron, IconLock } from "./icons";
 
 /* ------------------------------------------------------------------ */
@@ -426,6 +429,91 @@ export function WelcomeHeader({
           </span>
         </p>
       </div>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Monthly trend card — line chart with a prior-year comparison toggle */
+/* ------------------------------------------------------------------ */
+
+export interface MonthlyPoint {
+  label: string;
+  value: number;
+  isActual: boolean;
+  budget?: number;
+  prior?: number;
+}
+
+/**
+ * Every monthly series in the portal renders through this, so the
+ * compare-with-prior-year affordance is in the same place on every chart.
+ */
+export function MonthlyTrendCard({
+  eyebrow,
+  title,
+  subtitle,
+  data,
+  format,
+  color,
+  height = 230,
+  valueLabel = "Actual",
+  compareLabel = "Prior year",
+  zeroAnchored = true,
+}: {
+  eyebrow?: string;
+  title: string;
+  subtitle?: string;
+  data: MonthlyPoint[];
+  format: (n: number) => string;
+  color?: string;
+  height?: number;
+  valueLabel?: string;
+  compareLabel?: string;
+  zeroAnchored?: boolean;
+}) {
+  const [compare, setCompare] = useState(false);
+  const hasPrior = data.some((d) => d.prior != null);
+
+  return (
+    <Card>
+      <CardHeader
+        eyebrow={eyebrow}
+        title={title}
+        subtitle={subtitle}
+        action={
+          hasPrior ? (
+            <button
+              type="button"
+              onClick={() => setCompare((v) => !v)}
+              aria-pressed={compare}
+              className={cx(
+                "rounded-md border px-2.5 py-1 text-[11.5px] font-medium whitespace-nowrap transition-colors",
+                compare
+                  ? "border-accent-line bg-accent-soft text-accent-strong"
+                  : "border-line bg-surface text-ink-3 hover:border-line-strong hover:text-ink-2",
+              )}
+            >
+              Compare {compareLabel.toLowerCase()}
+            </button>
+          ) : undefined
+        }
+      />
+      <TrendChart
+        data={data.map((d) => ({
+          label: d.label,
+          value: d.value,
+          isActual: d.isActual,
+          budget: d.budget,
+          compare: compare ? d.prior : undefined,
+        }))}
+        format={format}
+        height={height}
+        color={color}
+        valueLabel={valueLabel}
+        compareLabel={compareLabel}
+        zeroAnchored={zeroAnchored}
+      />
     </Card>
   );
 }

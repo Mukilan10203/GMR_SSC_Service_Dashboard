@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import type {
   Feedback,
@@ -36,8 +36,9 @@ import {
   TrendPill,
   serviceColor,
 } from "@/components/ui/primitives";
-import { BulletGauge, ColumnChart, HBarList, Sparkline, TrendChart } from "@/components/charts";
-import { IconChevronDown } from "./icons";
+import { BulletGauge, HBarList, Sparkline, TrendChart } from "@/components/charts";
+import { MonthlyTrendCard } from "./blocks";
+import { IconChevron, IconChevronDown, IconClose } from "./icons";
 
 /* ------------------------------------------------------------------ */
 /* KPI card — with the KPI → issue → feedback chain                    */
@@ -49,6 +50,7 @@ export function KpiCard({
   feedback,
   color,
   groupChip,
+  onOpen,
 }: {
   kpi: Kpi;
   issues: Issue[];
@@ -56,6 +58,8 @@ export function KpiCard({
   color: string;
   /** Subfunction label shown above the name when it adds information. */
   groupChip?: string;
+  /** Opens the full trend view for this indicator. */
+  onOpen?: (kpi: Kpi) => void;
 }) {
   const [open, setOpen] = useState(false);
   const linkedIssues = issues.filter((i) => kpi.relatedIssueIds.includes(i.id));
@@ -79,7 +83,24 @@ export function KpiCard({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           {groupChip && <p className="eyebrow mb-1">{groupChip}</p>}
-          <h3 className="text-[14px] leading-snug font-semibold text-ink">{kpi.name}</h3>
+          {onOpen ? (
+            <button
+              type="button"
+              onClick={() => onOpen(kpi)}
+              className="group/title text-left"
+              title="Open trend detail"
+            >
+              <h3 className="text-[14px] leading-snug font-semibold text-ink group-hover/title:text-accent">
+                {kpi.name}
+                <IconChevron
+                  size={12}
+                  className="ml-1 inline-block align-middle text-ink-4 transition-transform group-hover/title:translate-x-0.5 group-hover/title:text-accent"
+                />
+              </h3>
+            </button>
+          ) : (
+            <h3 className="text-[14px] leading-snug font-semibold text-ink">{kpi.name}</h3>
+          )}
         </div>
         <StatusPill status={kpi.status} size="sm" />
       </div>
@@ -226,6 +247,7 @@ export function KpiGroupSection({
   feedback,
   color,
   defaultOpen = false,
+  onOpenKpi,
 }: {
   title: string;
   kpis: Kpi[];
@@ -233,6 +255,7 @@ export function KpiGroupSection({
   feedback: Feedback[];
   color: string;
   defaultOpen?: boolean;
+  onOpenKpi?: (kpi: Kpi) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const counts = {
@@ -271,6 +294,7 @@ export function KpiGroupSection({
               feedback={feedback}
               color={color}
               groupChip={k.group && k.group !== title ? k.group : undefined}
+              onOpen={onOpenKpi}
             />
           ))}
         </div>
@@ -1001,20 +1025,19 @@ function SubServiceDetailView({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <Card>
-          <CardHeader
-            eyebrow="Volume"
-            title={`${detail.name} — ${detail.unit} per month`}
-            subtitle="Faded columns are forecast."
-          />
-          <ColumnChart
-            data={detail.series.map((s) => ({ label: s.short, value: s.value, isActual: s.isActual }))}
-            format={(n) => formatNumber(n)}
-            height={230}
-            color={hue}
-            valueLabel={detail.unit}
-          />
-        </Card>
+        <MonthlyTrendCard
+          eyebrow="Volume"
+          title={`${detail.name} — ${detail.unit} per month`}
+          data={detail.series.map((x) => ({
+            label: x.short,
+            value: x.value,
+            isActual: x.isActual,
+            prior: x.prior,
+          }))}
+          format={(n) => formatNumber(n)}
+          color={hue}
+          valueLabel={detail.unit}
+        />
 
         <div className="grid gap-4">
           <Card>
@@ -1240,6 +1263,242 @@ export function KpiOverviewPanel({
           </p>
         )}
       </Card>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* KPI detail drawer — full trend with a two-year comparison            */
+/* ------------------------------------------------------------------ */
+
+export function KpiDetailDrawer({
+  kpi,
+  issues,
+  feedback,
+  color,
+  periodLabel,
+  priorPeriodLabel,
+  onClose,
+}: {
+  kpi: Kpi | null;
+  issues: Issue[];
+  feedback: Feedback[];
+  color: string;
+  periodLabel: string;
+  priorPeriodLabel: string;
+  onClose: () => void;
+}) {
+  const [compare, setCompare] = useState(true);
+
+  useEffect(() => {
+    if (!kpi) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [kpi, onClose]);
+
+  if (!kpi) return null;
+
+  const hasPrior = kpi.series.some((s) => s.prior != null);
+  const actual = kpi.series.filter((s) => s.isActual);
+  const priorActual = actual.filter((s) => s.prior != null);
+  const best = actual.reduce(
+    (acc, s) => (kpi.direction === "higher-better" ? Math.max(acc, s.value) : Math.min(acc, s.value)),
+    actual[0]?.value ?? 0,
+  );
+  const worst = actual.reduce(
+    (acc, s) => (kpi.direction === "higher-better" ? Math.min(acc, s.value) : Math.max(acc, s.value)),
+    actual[0]?.value ?? 0,
+  );
+  const avg = actual.length ? actual.reduce((a, s) => a + s.value, 0) / actual.length : 0;
+  const priorAvg = priorActual.length
+    ? priorActual.reduce((a, s) => a + (s.prior as number), 0) / priorActual.length
+    : null;
+  const yoy = priorAvg ? ((avg - priorAvg) / Math.abs(priorAvg)) * 100 : null;
+  const monthsOnTarget = actual.filter((s) =>
+    kpi.direction === "higher-better" ? s.value >= kpi.target : s.value <= kpi.target,
+  ).length;
+
+  const linkedIssues = issues.filter((i) => kpi.relatedIssueIds.includes(i.id));
+  const linkedFeedback = feedback.filter((f) => kpi.relatedFeedbackIds.includes(f.id));
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-ink/35" onClick={onClose} aria-hidden />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-label={kpi.name}
+        className="animate-in relative flex h-full w-full max-w-[720px] flex-col overflow-y-auto bg-surface shadow-pop"
+      >
+        <header className="sticky top-0 z-10 border-b border-line bg-surface px-6 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              {kpi.group && <p className="eyebrow mb-1.5">{kpi.group}</p>}
+              <h2 className="text-[17px] leading-snug font-semibold text-ink">{kpi.name}</h2>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <StatusPill status={kpi.status} size="sm" />
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg p-1.5 text-ink-3 transition-colors hover:bg-surface-sunken hover:text-ink"
+                aria-label="Close"
+              >
+                <IconClose size={18} />
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div className="space-y-5 px-6 py-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatTile label="Actual" value={formatMetric(kpi.actual, kpi.unit)} emphasis accent={color} />
+            <StatTile
+              label="Target"
+              value={`${kpi.direction === "higher-better" ? "≥ " : "≤ "}${formatMetric(kpi.target, kpi.unit)}`}
+              emphasis
+            />
+            <StatTile
+              label="Average this year"
+              value={formatMetric(avg, kpi.unit)}
+              emphasis
+              caption={`${actual.length} closed months`}
+            />
+            <StatTile
+              label="Months on target"
+              value={`${monthsOnTarget} / ${actual.length}`}
+              emphasis
+              status={monthsOnTarget === actual.length ? "good" : monthsOnTarget === 0 ? "bad" : "warn"}
+            />
+          </div>
+
+          <Card>
+            <CardHeader
+              eyebrow="Trend"
+              title={`${periodLabel} performance against target`}
+              action={
+                hasPrior ? (
+                  <button
+                    type="button"
+                    onClick={() => setCompare((v) => !v)}
+                    aria-pressed={compare}
+                    className={cx(
+                      "rounded-md border px-2.5 py-1 text-[11.5px] font-medium whitespace-nowrap transition-colors",
+                      compare
+                        ? "border-accent-line bg-accent-soft text-accent-strong"
+                        : "border-line bg-surface text-ink-3 hover:border-line-strong hover:text-ink-2",
+                    )}
+                  >
+                    Compare {priorPeriodLabel}
+                  </button>
+                ) : undefined
+              }
+            />
+            <TrendChart
+              data={kpi.series.map((s) => ({
+                label: s.short,
+                value: s.value,
+                isActual: s.isActual,
+                budget: kpi.target,
+                compare: compare ? s.prior : undefined,
+              }))}
+              format={(n) => formatMetric(n, kpi.unit)}
+              height={280}
+              color={color}
+              valueLabel={periodLabel}
+              compareLabel={priorPeriodLabel}
+              budgetLabel="Target"
+              zeroAnchored={kpi.unit !== "percent"}
+            />
+          </Card>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <StatTile
+              label="Best month"
+              value={formatMetric(best, kpi.unit)}
+              emphasis
+              status="good"
+            />
+            <StatTile label="Worst month" value={formatMetric(worst, kpi.unit)} emphasis status="bad" />
+            <StatTile
+              label={`Versus ${priorPeriodLabel}`}
+              value={yoy == null ? "—" : `${yoy >= 0 ? "+" : "−"}${Math.abs(yoy).toFixed(1)}%`}
+              emphasis
+              caption={priorAvg == null ? "No prior year" : `${formatMetric(priorAvg, kpi.unit)} average`}
+            />
+          </div>
+
+          <Card>
+            <CardHeader eyebrow="Against target" title="Where this month sits" />
+            <BulletGauge
+              actual={kpi.actual}
+              target={kpi.target}
+              direction={kpi.direction}
+              color={
+                kpi.status === "good"
+                  ? "var(--color-good)"
+                  : kpi.status === "warn"
+                    ? "var(--color-warn)"
+                    : "var(--color-bad)"
+              }
+              format={(n) => formatMetric(n, kpi.unit)}
+              scaleMax={kpi.unit === "percent" ? 100 : Math.max(kpi.actual, kpi.target) * 1.35}
+            />
+            <p className="mt-4 border-t border-line-soft pt-3 text-[12.5px] leading-relaxed text-ink-3">
+              {kpi.gapNarrative}
+            </p>
+          </Card>
+
+          {linkedIssues.length > 0 && (
+            <Card>
+              <CardHeader eyebrow="Linked" title={`${linkedIssues.length} open issue${linkedIssues.length === 1 ? "" : "s"}`} />
+              <div className="space-y-2.5">
+                {linkedIssues.map((i) => (
+                  <Link
+                    key={i.id}
+                    href={`/issues?issue=${i.id}`}
+                    className="block rounded-lg border border-line p-3.5 transition-colors hover:border-line-strong hover:bg-surface-sunken"
+                  >
+                    <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                      <Badge tone={PRIORITY_TONE[i.priority]}>{i.priority}</Badge>
+                      <span className="font-mono text-[11px] text-ink-4">{i.ref}</span>
+                      <span className="ml-auto text-[11.5px] text-ink-4 tnum">Open {i.agingDays} days</span>
+                    </div>
+                    <p className="text-[13px] leading-snug font-medium text-ink">{i.title}</p>
+                  </Link>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {linkedFeedback.length > 0 && (
+            <Card>
+              <CardHeader eyebrow="Voice of the customer" title="What people said" />
+              <div className="space-y-3">
+                {linkedFeedback.map((f) => (
+                  <figure key={f.id} className="rounded-lg border border-line p-3.5">
+                    <blockquote className="border-l-2 border-line-strong pl-3 text-[12.5px] leading-relaxed text-ink-2 italic">
+                      “{f.quote}”
+                    </blockquote>
+                    <figcaption className="mt-2 flex flex-wrap items-center gap-2 pl-3 text-[11.5px] text-ink-4">
+                      <span className="font-medium text-ink-3">{f.author}</span>
+                      <span>· {f.authorRole}</span>
+                      <span className="ml-auto text-ink-3 tnum">{f.rating} / 5</span>
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            </Card>
+          )}
+        </div>
+      </aside>
     </div>
   );
 }

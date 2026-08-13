@@ -125,16 +125,17 @@ export function getSnapshot(
   user: PortalUser,
   entityId: string,
   periodId: string,
+  monthIndex?: number | null,
 ): EntitySnapshot | null {
   if (!canAccessEntity(user, entityId)) return null;
 
   const services = getAuthorisedServices(user, entityId);
-  const key = `${entityId}|${periodId}|${services.join(",")}`;
+  const key = `${entityId}|${periodId}|${services.join(",")}|${monthIndex ?? "latest"}`;
 
   const hit = snapshotCache.get(key);
   if (hit) return hit;
 
-  const snapshot = buildEntitySnapshot(entityId, periodId, services);
+  const snapshot = buildEntitySnapshot(entityId, periodId, services, monthIndex ?? undefined);
   if (snapshotCache.size >= CACHE_LIMIT) {
     const oldest = snapshotCache.keys().next().value;
     if (oldest) snapshotCache.delete(oldest);

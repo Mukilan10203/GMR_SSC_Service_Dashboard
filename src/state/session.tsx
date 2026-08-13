@@ -31,12 +31,15 @@ interface SessionValue {
   user: PortalUser | null;
   entityId: string;
   periodId: string;
+  /** Fiscal month being viewed, or null for "the latest closed month". */
+  monthIndex: number | null;
   /** False until localStorage has been read — avoids a hydration flash. */
   ready: boolean;
   login: (email: string, password: string) => { ok: boolean; error?: string };
   logout: () => void;
   setEntity: (entityId: string) => void;
   setPeriod: (periodId: string) => void;
+  setMonthIndex: (monthIndex: number | null) => void;
 }
 
 const SessionContext = createContext<SessionValue | null>(null);
@@ -45,6 +48,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<PortalUser | null>(null);
   const [entityId, setEntityId] = useState("");
   const [periodId, setPeriodId] = useState("");
+  const [monthIndex, setMonthIndex] = useState<number | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -118,14 +122,28 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const setPeriod = useCallback(
     (next: string) => {
       setPeriodId(next);
+      // A month index means a different month in a different year, so a year
+      // change returns the view to that year's latest close.
+      setMonthIndex(null);
       if (user) persist({ userId: user.id, entityId, periodId: next });
     },
     [persist, entityId, user],
   );
 
   const value = useMemo<SessionValue>(
-    () => ({ user, entityId, periodId, ready, login, logout, setEntity, setPeriod }),
-    [user, entityId, periodId, ready, login, logout, setEntity, setPeriod],
+    () => ({
+      user,
+      entityId,
+      periodId,
+      monthIndex,
+      ready,
+      login,
+      logout,
+      setEntity,
+      setPeriod,
+      setMonthIndex,
+    }),
+    [user, entityId, periodId, monthIndex, ready, login, logout, setEntity, setPeriod],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

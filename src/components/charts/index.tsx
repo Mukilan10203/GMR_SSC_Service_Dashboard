@@ -40,8 +40,11 @@ function ticks(max: number, count = 4): number[] {
   const mag = Math.pow(10, Math.floor(Math.log10(raw)));
   const norm = raw / mag;
   const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag;
+  // Round the top tick *up* past `max`. Stopping at the last tick below `max`
+  // would put the axis ceiling under the data and clip the series.
+  const top = Math.ceil(max / step) * step;
   const out: number[] = [];
-  for (let v = 0; v <= max + step * 0.001; v += step) out.push(v);
+  for (let v = 0; v <= top + step * 0.001; v += step) out.push(v);
   return out;
 }
 
@@ -143,7 +146,17 @@ export interface TrendPoint {
   value: number;
   isActual: boolean;
   budget?: number;
+  /** Same month, prior fiscal year — drawn as the comparison line. */
+  compare?: number;
 }
+
+/**
+ * Prior-year comparison hue. Slot 2 of the validated categorical order, so it
+ * clears the CVD gate against the slot-1 blue most primaries use. It also
+ * carries a dash pattern and a legend entry, so identity never rests on hue
+ * alone even when a primary shares its family.
+ */
+const COMPARE_COLOR = "var(--color-svc-procurement)";
 
 export function TrendChart({
   data,
@@ -152,8 +165,10 @@ export function TrendChart({
   color = "var(--color-accent)",
   budgetLabel = "Budget",
   valueLabel = "Actual",
+  compareLabel = "Prior year",
   zeroAnchored = true,
   showForecastBand = true,
+  showLegend = true,
 }: {
   data: TrendPoint[];
   format: (n: number) => string;
@@ -161,8 +176,10 @@ export function TrendChart({
   color?: string;
   budgetLabel?: string;
   valueLabel?: string;
+  compareLabel?: string;
   zeroAnchored?: boolean;
   showForecastBand?: boolean;
+  showLegend?: boolean;
 }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const gid = useId().replace(/:/g, "");
@@ -176,9 +193,19 @@ export function TrendChart({
   const plotH = height - padT - padB;
 
   const hasBudget = data.some((d) => d.budget != null);
-  const allValues = [...data.map((d) => d.value), ...data.map((d) => d.budget ?? 0)];
+  const hasCompare = data.some((d) => d.compare != null);
+  const allValues = [
+    ...data.map((d) => d.value),
+    ...data.map((d) => d.budget ?? 0),
+    ...data.filter((d) => d.compare != null).map((d) => d.compare as number),
+  ];
   const rawMax = Math.max(...allValues, 1);
-  const rawMin = zeroAnchored ? 0 : Math.min(...data.map((d) => d.value)) * 0.985;
+  const rawMin = zeroAnchored
+    ? 0
+    : Math.min(
+        ...data.map((d) => d.value),
+        ...data.filter((d) => d.compare != null).map((d) => d.compare as number),
+      ) * 0.985;
   const tickVals = zeroAnchored ? ticks(rawMax * 1.08) : [];
   const yMax = zeroAnchored ? Math.max(...tickVals) : rawMax * 1.01;
   const yMin = zeroAnchored ? 0 : rawMin;
@@ -207,7 +234,30 @@ export function TrendChart({
 
   const hovered = hover != null ? data[hover] : null;
 
+  const legend = showLegend && (hasCompare || hasBudget) && (
+    <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-ink-3">
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-[2px] w-3.5 rounded-full" style={{ background: color }} />
+        {valueLabel}
+      </span>
+      {hasCompare && (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-0 w-3.5 border-t-2 border-dashed" style={{ borderColor: COMPARE_COLOR }} />
+          {compareLabel}
+        </span>
+      )}
+      {hasBudget && (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-0 w-3.5 border-t border-dashed border-ink-4" />
+          {budgetLabel}
+        </span>
+      )}
+    </div>
+  );
+
   return (
+    <>
+    {legend}
     <div ref={ref} className="relative w-full" style={{ height }}>
       {width > 0 && (
         <svg
@@ -259,6 +309,22 @@ export function TrendChart({
               strokeWidth="1.25"
               strokeDasharray="3 3"
               opacity={0.7}
+            />
+          )}
+
+          {/* Prior-year comparison */}
+          {hasCompare && (
+            <path
+              d={data
+                .filter((d) => d.compare != null)
+                .map((d, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(2)},${y(d.compare as number).toFixed(2)}`)
+                .join(" ")}
+              fill="none"
+              stroke={COMPARE_COLOR}
+              strokeWidth="1.75"
+              strokeDasharray="5 3"
+              strokeLinecap="round"
+              opacity={0.9}
             />
           )}
 
@@ -316,6 +382,23 @@ export function TrendChart({
             {valueLabel}
             <span className="ml-auto pl-3 font-semibold text-ink tnum">{format(hovered.value)}</span>
           </p>
+          {hovered.compare != null && (
+            <p className="mt-0.5 flex items-center gap-2 text-ink-2">
+              <span
+                className="h-0 w-2 border-t-2 border-dashed"
+                style={{ borderColor: COMPARE_COLOR }}
+              />
+              {compareLabel}
+              <span className="ml-auto pl-3 tnum">{format(hovered.compare)}</span>
+            </p>
+          )}
+          {hovered.compare != null && hovered.compare !== 0 && (
+            <p className="mt-1 text-[11px] text-ink-4 tnum">
+              {hovered.value >= hovered.compare ? "+" : "−"}
+              {Math.abs(((hovered.value - hovered.compare) / hovered.compare) * 100).toFixed(1)}% vs{" "}
+              {compareLabel.toLowerCase()}
+            </p>
+          )}
           {hovered.budget != null && (
             <p className="mt-0.5 flex items-center gap-2 text-ink-2">
               <span className="h-0 w-2 border-t border-dashed border-ink-4" />
@@ -327,6 +410,7 @@ export function TrendChart({
         </Tooltip>
       )}
     </div>
+    </>
   );
 }
 

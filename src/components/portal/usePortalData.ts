@@ -15,12 +15,12 @@ export function usePortalData(): {
   snapshot: EntitySnapshot | null;
   ready: boolean;
 } {
-  const { user, entityId, periodId, ready } = useSession();
+  const { user, entityId, periodId, monthIndex, ready } = useSession();
 
   const snapshot = useMemo(() => {
     if (!user || !entityId || !periodId) return null;
-    return getSnapshot(user, entityId, periodId);
-  }, [user, entityId, periodId]);
+    return getSnapshot(user, entityId, periodId, monthIndex);
+  }, [user, entityId, periodId, monthIndex]);
 
   return { user, snapshot, ready };
 }

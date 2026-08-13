@@ -149,7 +149,7 @@ function buildVolumes(entity: Entity, serviceId: ServiceId, period: Period): Ser
   const bp = BLUEPRINTS[serviceId];
   const def = getPeriodDefinition(period.id);
   const factor = def.volumeFactor;
-  const currentIndex = def.actualMonthCount - 1;
+  const currentIndex = period.actualMonthCount - 1;
 
   const txn: Record<string, number[]> = {};
   for (const line of bp.txn) {
@@ -180,7 +180,7 @@ function buildVolumes(entity: Entity, serviceId: ServiceId, period: Period): Ser
     fte,
     currentIndex,
     prevIndex: Math.max(0, currentIndex - 1),
-    actualCount: def.actualMonthCount,
+    actualCount: period.actualMonthCount,
   };
 }
 
@@ -337,8 +337,7 @@ function buildEntityBilling(
     };
   });
 
-  const def = getPeriodDefinition(period.id);
-  const cur = def.actualMonthCount - 1;
+  const cur = period.actualMonthCount - 1;
   const prev = Math.max(0, cur - 1);
 
   const actual = monthly.filter((m) => m.isActual);
@@ -445,7 +444,7 @@ function buildSla(
   const def = getPeriodDefinition(period.id);
   const monthly = period.months.map((mo, m) => {
     // Gentle recovery trend plus stable per-month noise.
-    const trendPart = (m - (def.actualMonthCount - 1)) * 0.12;
+    const trendPart = (m - (period.actualMonthCount - 1)) * 0.12;
     const noise = jitter(`sla-${entity.id}-${serviceId}-${m}`) * 1.1;
     return {
       monthKey: mo.key,
@@ -455,9 +454,9 @@ function buildSla(
     };
   });
   // Anchor the reporting month to the exact roll-up.
-  monthly[def.actualMonthCount - 1].value = overall;
+  monthly[period.actualMonthCount - 1].value = overall;
 
-  const prev = monthly[Math.max(0, def.actualMonthCount - 2)].value;
+  const prev = monthly[Math.max(0, period.actualMonthCount - 2)].value;
   return {
     serviceId,
     overall,
@@ -643,8 +642,7 @@ function buildKpis(
   issues: Issue[],
   feedback: Feedback[],
 ): Kpi[] {
-  const def = getPeriodDefinition(period.id);
-  const cur = def.actualMonthCount - 1;
+  const cur = period.actualMonthCount - 1;
 
   return KPI_SPECS.filter((s) => s.serviceId === serviceId).map((spec) => {
     const resolved = ctx[spec.metricKey];
@@ -1635,6 +1633,28 @@ function formatKpiValue(k: Kpi): string {
 /* Public builder                                                      */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Full prior-year snapshot, memoised. Used to hang a same-fiscal-month
+ * comparison series on every monthly chart. Recursion terminates because the
+ * oldest defined period has no prior.
+ */
+const priorSnapshotCache = new Map<string, EntitySnapshot | null>();
+
+function priorYearSnapshot(
+  entityId: string,
+  periodId: string,
+  services: ServiceId[],
+): EntitySnapshot | null {
+  const priorId = getPriorPeriodId(periodId);
+  if (!priorId) return null;
+  const key = `${entityId}|${priorId}|${services.join(",")}`;
+  const hit = priorSnapshotCache.get(key);
+  if (hit !== undefined) return hit;
+  const snap = buildEntitySnapshot(entityId, priorId, services);
+  priorSnapshotCache.set(key, snap);
+  return snap;
+}
+
 /** FY total for the prior year — used for the year-on-year comparison. */
 function priorYearTotal(entity: Entity, periodId: string, services: ServiceId[]): number {
   const priorId = getPriorPeriodId(periodId) ?? periodId;
@@ -1647,14 +1667,30 @@ function priorYearTotal(entity: Entity, periodId: string, services: ServiceId[])
   );
 }
 
+/**
+ * Re-cuts a period as at an earlier closed month, so the portal can be read
+ * "as at end of July" rather than only at the latest close. Everything
+ * downstream keys off `period.actualMonthCount`, so overriding it here is
+ * enough — months after the selection become forecast.
+ */
+function periodAsAt(period: Period, monthIndex: number): Period {
+  const i = clamp(Math.round(monthIndex), 0, period.months.length - 1);
+  if (i === period.actualMonthCount - 1) return period;
+  const months = period.months.map((m, idx) => ({ ...m, isActual: idx <= i }));
+  return { ...period, months, actualMonthCount: i + 1, asOf: months[i].label };
+}
+
 export function buildEntitySnapshot(
   entityId: string,
   periodId: string,
   allowedServices?: ServiceId[],
+  monthIndex?: number,
 ): EntitySnapshot {
   const entity = ENTITIES.find((e) => e.id === entityId) ?? ENTITIES[0];
   const location = LOCATIONS.find((l) => l.id === entity.locationId) ?? LOCATIONS[0];
-  const period = getPeriod(periodId);
+  const basePeriod = getPeriod(periodId);
+  const period =
+    monthIndex == null ? basePeriod : periodAsAt(basePeriod, monthIndex);
 
   const services = entity.services.filter((s) => !allowedServices || allowedServices.includes(s));
 
@@ -1811,6 +1847,38 @@ export function buildEntitySnapshot(
       ),
     ),
   );
+
+  /* 6b — hang the prior-year comparison on every monthly series. */
+  const prior = priorYearSnapshot(entity.id, period.id, services);
+  if (prior) {
+    entityBilling.monthly.forEach((m, i) => {
+      m.prior = prior.billing.monthly[i]?.total;
+    });
+    for (const snap of serviceSnapshots) {
+      const p = prior.services.find((x) => x.service.id === snap.service.id);
+      if (!p) continue;
+      snap.billing.monthly.forEach((m, i) => {
+        m.prior = p.billing.monthly[i]?.total;
+      });
+      snap.activityChart.series.forEach((x, i) => {
+        x.prior = p.activityChart.series[i]?.value;
+      });
+      for (const sub of snap.subServices) {
+        const ps = p.subServices.find((x) => x.id === sub.id);
+        if (!ps) continue;
+        sub.series.forEach((x, i) => {
+          x.prior = ps.series[i]?.value;
+        });
+      }
+      for (const k of snap.kpis) {
+        const pk = p.kpis.find((x) => x.id === k.id);
+        if (!pk) continue;
+        k.series.forEach((x, i) => {
+          x.prior = pk.series[i]?.value;
+        });
+      }
+    }
+  }
 
   const cx = buildCx(entity, period, services, slas, mix, feedback);
   const exec = buildExec(fin, entityBilling, automation, period);

@@ -159,6 +159,8 @@ export interface MonthBilling {
   fte: number;
   total: number;
   budget: number;
+  /** Same fiscal month, prior year. Absent when there is no prior period. */
+  prior?: number;
 }
 
 /** Line-level attribution explaining a month-on-month billing move. */
@@ -278,7 +280,7 @@ export interface Kpi {
   status: Status;
   trend: Trend;
   deltaPct: number;
-  series: { monthKey: string; short: string; value: number; isActual: boolean }[];
+  series: { monthKey: string; short: string; value: number; isActual: boolean; prior?: number }[];
   /** e.g. "40% of mandates breached the 30-day threshold". */
   gapNarrative: string;
   /** Volume of work sitting behind the percentage. */
@@ -496,7 +498,7 @@ export interface SubServiceDetail {
   code: string;
   name: string;
   /** Monthly driver volume across the fiscal year. */
-  series: { short: string; value: number; isActual: boolean }[];
+  series: { short: string; value: number; isActual: boolean; prior?: number }[];
   unit: string;
   unitSingular: string;
   currentVolume: number;
@@ -524,7 +526,7 @@ export interface ServiceSnapshot {
   activityChart: {
     title: string;
     unit: string;
-    series: { short: string; value: number; isActual: boolean }[];
+    series: { short: string; value: number; isActual: boolean; prior?: number }[];
   };
   completion: { completed: number; pending: number; exceptions: number };
   billing: ServiceBilling;
