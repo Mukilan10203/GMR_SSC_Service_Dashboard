@@ -92,9 +92,10 @@ export default function AutomationPage() {
         title="Bot & AI control tower"
         subtitle={
           <>
-            The digital workforce running transactions for {snapshot.entity.name}. Every job, exception
-            and hour released, monitored in one place — and reconciled to the automation fee you are
-            charged.
+            The digital workforce running transactions for {snapshot.entity.name}. Automation is
+            delivered inside your service towers rather than sold separately, so every bot belongs to
+            a tower — and every job, exception and hour released reconciles to the digital workforce
+            lines on that tower&rsquo;s invoice.
           </>
         }
         actions={
@@ -103,7 +104,7 @@ export default function AutomationPage() {
               Fleet success {formatPercent(automation.successRate)}
             </StatusPill>
             <Link
-              href="/services/automation?tab=billing"
+              href="/billing"
               className="rounded-lg border border-line bg-surface px-3 py-2 text-[12.5px] font-medium text-ink-2 transition-colors hover:border-line-strong hover:text-ink"
             >
               Automation billing →
@@ -167,7 +168,7 @@ export default function AutomationPage() {
       <section className="mb-8">
         <SectionHeading
           title="What the digital workforce is worth"
-          subtitle="Effort released, valued at the blended cost of the manual effort it replaces, against the fee charged for the automation service."
+          subtitle="Effort released, valued at the blended cost of the manual effort it replaces, against the digital workforce fee charged inside your service towers."
         />
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
           <Card>
@@ -232,7 +233,7 @@ export default function AutomationPage() {
               <DataRow
                 label="Automation fee charged"
                 value={`− ${formatMoney(automation.automationCostMonth)}`}
-                hint="Licences, transactions, builds and CoE capacity"
+                hint="Runtime licences and bot transactions, billed within your towers"
               />
               <DataRow
                 label="Net monthly value"

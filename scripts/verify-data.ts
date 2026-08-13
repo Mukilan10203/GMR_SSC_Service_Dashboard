@@ -7,8 +7,8 @@
  */
 
 import { buildEntitySnapshot } from "../src/lib/mock/engine";
-import { ENTITIES } from "../src/lib/mock/organisation";
-import { BLUEPRINTS } from "../src/lib/mock/rate-cards";
+import { ENTITIES, SERVICES } from "../src/lib/mock/organisation";
+import { BLUEPRINTS, botLicenceLineId, botTxnLineId } from "../src/lib/mock/rate-cards";
 import { getPeriod } from "../src/lib/mock/calendar";
 import { formatMoney, formatNumber } from "../src/lib/format";
 
@@ -123,9 +123,23 @@ for (const svc of dial.services) {
   check(
     `${svc.service.code} SLA = Σ(component × weight)`,
     near(weighted, svc.sla.overall, 0.02) && near(weightSum, 1, 0.001),
-    `${svc.sla.overall.toFixed(2)}% from ${svc.sla.components.length} components`,
+    `${svc.sla.overall.toFixed(2)}% from ${svc.sla.components.length} sub-services`,
   );
 }
+
+check(
+  "Every sub-service has exactly one SLA component, and vice versa",
+  SERVICES.every((s) => {
+    const componentIds = new Set(dial.services.find((x) => x.service.id === s.id)
+      ? dial.services.find((x) => x.service.id === s.id)!.sla.components.map((c) => c.id)
+      : []);
+    return (
+      componentIds.size === s.subServices.length &&
+      s.subServices.every((sub) => componentIds.has(sub.slaComponentId))
+    );
+  }),
+  SERVICES.map((s) => `${s.code} ${s.subServices.length}`).join(" · "),
+);
 
 const entityWeighted = dial.services.reduce((a, s) => a + s.sla.overall * s.billing.mix, 0);
 check(
@@ -154,35 +168,85 @@ check(
   `${formatNumber(rejectKpi.affectedVolume!.count)} of ${formatNumber(apLine.volume)} at ${rejectKpi.actual}%`,
 );
 
-const hr = dial.services.find((s) => s.service.id === "hr")!;
-const taKpi = hr.kpis.find((k) => k.id === "hr-kpi-ta-sla")!;
-const taComponent = hr.sla.components.find((c) => c.id === "hr-sla-ta")!;
+const hr = dial.services.find((s) => s.service.id === "hrops")!;
+const taKpi = hr.kpis.find((k) => k.id === "hrops-kpi-ta-sla")!;
+const taComponent = hr.sla.components.find((c) => c.id === "hrops-sla-ta")!;
 check(
-  "HR 'talent acquisition SLA' KPI = its SLA component",
+  "HR Ops 'talent acquisition SLA' KPI = its SLA component",
   near(taKpi.actual, taComponent.actual, 0.02),
   `${taKpi.actual}% (target ${taKpi.target}%)`,
 );
 
+const idt = dial.services.find((s) => s.service.id === "idt")!;
+const itcKpi = idt.kpis.find((k) => k.id === "idt-kpi-itc")!;
+const itcComponent = idt.sla.components.find((c) => c.id === "idt-sla-itc")!;
+check(
+  "IDT 'input credit match rate' KPI = its SLA component",
+  near(itcKpi.actual, itcComponent.actual, 0.02),
+  `${itcKpi.actual}% (target ${itcKpi.target}%)`,
+);
+
+check(
+  "Every KPI naming a sub-service points at a real one in its tower",
+  dial.services.every((s) =>
+    s.kpis
+      .filter((k) => k.subServiceId)
+      .every((k) => s.service.subServices.some((sub) => sub.id === k.subServiceId)),
+  ),
+  `${dial.services.reduce((acc, s) => acc + s.kpis.length, 0)} KPIs across ${dial.services.length} towers`,
+);
+
 /* ================================================================== */
-/* 6. Automation control tower ties to automation billing              */
+/* 6. The control tower ties to the towers that pay for it             */
 /* ================================================================== */
 
 console.log("\n[1m6. Automation control tower ties to its invoice[0m");
 
-const auto = dial.services.find((s) => s.service.id === "automation")!;
 const a = dial.automation!;
-const licenceLine = auto.billing.txnLines.find((l) => l.id === "auto-licence")!;
-const txnLine = auto.billing.txnLines.find((l) => l.id === "auto-txn")!;
 
-check("Bots in the control tower = bots billed for", a.totalBots === licenceLine.volume, `${a.totalBots} bots`);
+const licenceVolume = (s: (typeof dial.services)[number]) =>
+  s.billing.txnLines.find((l) => l.id === botLicenceLineId(s.service.id))?.volume ?? 0;
+const botTxnVolume = (s: (typeof dial.services)[number]) =>
+  s.billing.txnLines.find((l) => l.id === botTxnLineId(s.service.id))?.volume ?? 0;
+const botFee = (s: (typeof dial.services)[number]) =>
+  (s.billing.txnLines.find((l) => l.id === botLicenceLineId(s.service.id))?.amount ?? 0) +
+  (s.billing.txnLines.find((l) => l.id === botTxnLineId(s.service.id))?.amount ?? 0);
+
+const licensedBots = dial.services.reduce((acc, s) => acc + licenceVolume(s), 0);
+const billedBotTxns = dial.services.reduce((acc, s) => acc + botTxnVolume(s), 0);
+const billedAutomationFee = dial.services.reduce((acc, s) => acc + botFee(s), 0);
+
 check(
-  "Σ bot transactions = transactions billed for",
-  a.bots.reduce((s, b) => s + b.transactions, 0) === txnLine.volume,
-  formatNumber(txnLine.volume),
+  "Bots in the control tower = runtime licences billed",
+  a.totalBots === licensedBots,
+  `${a.totalBots} bots`,
 );
 check(
-  "Automation cost = automation service billing",
-  near(a.automationCostMonth, auto.billing.currentTotal, 1),
+  "Σ bot transactions = bot transactions billed",
+  a.bots.reduce((s, b) => s + b.transactions, 0) === billedBotTxns,
+  formatNumber(billedBotTxns),
+);
+check(
+  "Per-tower bot counts match per-tower licences",
+  dial.services.every(
+    (s) => a.bots.filter((b) => b.serviceId === s.service.id).length === licenceVolume(s),
+  ),
+  dial.services
+    .map((s) => `${s.service.code} ${a.bots.filter((b) => b.serviceId === s.service.id).length}`)
+    .join(" · "),
+);
+check(
+  "Every bot belongs to a real sub-service of its tower",
+  a.bots.every((b) =>
+    dial.services
+      .find((s) => s.service.id === b.serviceId)!
+      .service.subServices.some((sub) => sub.id === b.subServiceId),
+  ),
+  `${a.bots.length} bots mapped to sub-services`,
+);
+check(
+  "Automation fee = Σ digital workforce lines across the towers",
+  near(a.automationCostMonth, billedAutomationFee, 1),
   formatMoney(a.automationCostMonth),
 );
 check(
@@ -201,24 +265,23 @@ check(
   `${a.successRate}%`,
 );
 check(
-  "Automation SLA component uses the measured fleet rate",
-  near(auto.sla.components.find((c) => c.id === "auto-sla-success")!.actual, a.successRate, 0.02),
-  `${a.successRate}%`,
+  "Monthly hours released reconcile to the reporting month",
+  near(
+    a.monthlyHoursSaved.find((m) => m.short === fna.billing.currentMonthLabel.split(" ")[0])?.value ?? -1,
+    a.hoursSavedMonth,
+    Math.max(2, a.hoursSavedMonth * 0.005),
+  ),
+  `${formatNumber(a.hoursSavedMonth)} hrs`,
 );
 
 /* ================================================================== */
-/* 7. Analytics totals tie to what is billed                           */
+/* 7. Analytics totals reconcile internally                            */
 /* ================================================================== */
 
-console.log("\n[1m7. Analytics totals tie to what is billed[0m");
+console.log("\n[1m7. Analytics totals reconcile internally[0m");
 
-const an = dial.services.find((s) => s.service.id === "analytics")!;
 const anSnap = dial.analytics!;
-const productLine = an.billing.txnLines.find((l) => l.id === "an-products")!;
-const reportLine = an.billing.txnLines.find((l) => l.id === "an-reports")!;
 
-check("Live products = products billed for", anSnap.liveProducts === productLine.volume, `${anSnap.liveProducts} products`);
-check("Reports total = reports billed for", anSnap.totalReports === reportLine.volume, `${anSnap.totalReports} reports`);
 check(
   "Σ per-product reports = total reports",
   anSnap.products.reduce((s, p) => s + p.reports, 0) === anSnap.totalReports,
@@ -269,9 +332,9 @@ check(
 );
 
 const ghial = buildEntitySnapshot("ghial", "fy2026");
-const ghialHr = ghial.services.find((s) => s.service.id === "hr")!;
+const ghialHr = ghial.services.find((s) => s.service.id === "hrops")!;
 check(
-  "GHIAL HR SLA is materially below DIAL's (different entity, different story)",
+  "GHIAL HR Ops SLA is materially below DIAL's (different entity, different story)",
   ghialHr.sla.overall < hr.sla.overall - 8,
   `GHIAL ${ghialHr.sla.overall.toFixed(1)}% vs DIAL ${hr.sla.overall.toFixed(1)}%`,
 );

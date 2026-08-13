@@ -33,9 +33,10 @@ export default function ServicesPage() {
         title="Services provided to your organisation"
         subtitle={
           <>
-            {services.length} of the SSC&rsquo;s five service towers are contracted to {entity.name}.
-            Each card shows current usage, service level and cost — open any service for its full
-            usage, billing, performance and issue detail.
+            {services.length} of the SSC&rsquo;s five service towers — F&amp;A, HR Ops, Procurement
+            &amp; Contracts, Indirect Tax and Direct Tax — are contracted to {entity.name}. Each card
+            shows current usage, service level and cost; open any service for its sub-services,
+            billing, performance and issue detail.
           </>
         }
       />

@@ -275,7 +275,7 @@ export default function BillingPage() {
                     label: "FTE-based",
                     sublabel: "dedicated capacity",
                     value: billing.modelSplit.fte,
-                    color: "var(--color-svc-hr)",
+                    color: "var(--color-svc-hrops)",
                   },
                 ]}
                 format={(n) => formatMoney(n)}

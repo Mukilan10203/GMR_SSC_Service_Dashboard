@@ -66,6 +66,21 @@ export const FINANCIAL_BASELINE: FinancialBaseline = {
   dpo: 46.8,
 };
 
+/**
+ * The analytics footprint at the flagship entity (DIAL, scale 1.00).
+ *
+ * Analytics is not separately contracted — it is delivered on top of the five
+ * service towers from the transaction data they already process, so there is
+ * no rate-card line behind it. The footprint therefore scales directly with
+ * the size of the entity rather than with a billed volume.
+ */
+export const ANALYTICS_FOOTPRINT = {
+  products: 8,
+  reports: 24,
+  insights: 86,
+  activeUsers: 214,
+} as const;
+
 /* ------------------------------------------------------------------ */
 
 export interface AnalyticsProductSpec {
@@ -377,7 +392,21 @@ export const ANALYTICS_CATALOGUE = [
     name: "Workforce Cost Analytics",
     category: "People",
     description: "Manpower cost, overtime and contractor mix against operational demand.",
-    sourceSystem: "SuccessFactors + payroll",
+    sourceSystem: "SAP SuccessFactors + payroll",
     effort: "5 weeks",
+  },
+  {
+    name: "Tax Exposure Dashboard",
+    category: "Taxation",
+    description: "Open notices, disputed demand and unmatched input credit across direct and indirect tax.",
+    sourceSystem: "GSTN + TRACES + S/4HANA",
+    effort: "5 weeks",
+  },
+  {
+    name: "Contract Expiry & Obligation Tracker",
+    category: "Procurement",
+    description: "Renewal calendar, obligation compliance and auto-renew exposure across the contract estate.",
+    sourceSystem: "SAP Ariba",
+    effort: "3 weeks",
   },
 ];

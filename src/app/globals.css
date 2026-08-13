@@ -59,12 +59,17 @@
 
   --color-neutral-soft: #f1f4f8;
 
-  /* Service identity — used for charts, chips, and service accents */
+  /* Service identity — one per contracted tower. Used for charts, chips
+     and service accents. */
   --color-svc-fna: #1b6bd6;
-  --color-svc-hr: #7a5af8;
-  --color-svc-tax: #0b8f5e;
-  --color-svc-automation: #dd8319;
-  --color-svc-analytics: #0b9aaf;
+  --color-svc-hrops: #7a5af8;
+  --color-svc-procurement: #dd8319;
+  --color-svc-idt: #0b8f5e;
+  --color-svc-dt: #0b9aaf;
+
+  /* Cross-cutting capabilities — not towers, but they need an accent */
+  --color-svc-automation: #c2255c;
+  --color-svc-analytics: #4b5fbd;
 
   /* Type */
   --font-sans: "Segoe UI Variable Display", "Segoe UI", Inter, ui-sans-serif,

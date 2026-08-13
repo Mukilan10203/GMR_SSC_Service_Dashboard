@@ -15,6 +15,11 @@ import type { ServiceId } from "../domain/types";
  * 1.00) in the current reporting month (Nov of FY 2026). Other entities and
  * months are derived by multiplying through `scale`, `seasonality` and
  * `fteRamp`.
+ *
+ * Automation is not a separate tower. Each service carries two digital
+ * workforce lines — `<service>-botlic` (runtime licences) and
+ * `<service>-bottxn` (transactions executed by bots) — so the control tower
+ * reconciles to the tower that actually consumes the automation.
  */
 
 export interface TxnLineSpec {
@@ -57,16 +62,26 @@ export interface ServiceBlueprint {
 }
 
 /* Ratios that convert volume into value/quality figures. */
-export const AVG_INVOICE_VALUE = 179_700;
+export const AVG_INVOICE_VALUE = 17_969;
+export const AVG_PO_VALUE = 2_45_000;
+
+/** Digital workforce line ids, derived from the service id. */
+export const botLicenceLineId = (serviceId: ServiceId) => `${serviceId}-botlic`;
+export const botTxnLineId = (serviceId: ServiceId) => `${serviceId}-bottxn`;
+
+const BOT_LICENCE_RATE = 26_000;
+const BOT_TXN_RATE = 4.5;
 
 export const BLUEPRINTS: Record<ServiceId, ServiceBlueprint> = {
-  /* ---------------------------------------------------------------- */
+  /* ================================================================ */
+  /* F&A — AP · AR · Travel · Record to Report · Treasury             */
+  /* ================================================================ */
   fna: {
     serviceId: "fna",
     txn: [
       {
         id: "fna-ap",
-        label: "Supplier invoices processed",
+        label: "Supplier invoices processed (AP)",
         unit: "invoice",
         unitPlural: "invoices",
         baseVolume: 10_240,
@@ -74,17 +89,8 @@ export const BLUEPRINTS: Record<ServiceId, ServiceBlueprint> = {
         sourceSystem: "SAP S/4HANA",
       },
       {
-        id: "fna-expense",
-        label: "Employee expense claims settled",
-        unit: "claim",
-        unitPlural: "claims",
-        baseVolume: 3_120,
-        rate: 45,
-        sourceSystem: "SAP Concur",
-      },
-      {
         id: "fna-ar",
-        label: "Customer invoices raised",
+        label: "Customer invoices raised (AR)",
         unit: "invoice",
         unitPlural: "invoices",
         baseVolume: 2_260,
@@ -92,8 +98,17 @@ export const BLUEPRINTS: Record<ServiceId, ServiceBlueprint> = {
         sourceSystem: "SAP S/4HANA",
       },
       {
-        id: "fna-gl",
-        label: "GL journals & reconciliations",
+        id: "fna-travel",
+        label: "Travel & expense claims settled",
+        unit: "claim",
+        unitPlural: "claims",
+        baseVolume: 3_120,
+        rate: 45,
+        sourceSystem: "SAP Concur",
+      },
+      {
+        id: "fna-r2r",
+        label: "Journals & reconciliations (R2R)",
         unit: "entry",
         unitPlural: "entries",
         baseVolume: 1_480,
@@ -101,21 +116,39 @@ export const BLUEPRINTS: Record<ServiceId, ServiceBlueprint> = {
         sourceSystem: "SAP S/4HANA",
       },
       {
-        id: "fna-md",
-        label: "Vendor master records maintained",
-        unit: "record",
-        unitPlural: "records",
-        baseVolume: 640,
-        rate: 60,
-        sourceSystem: "SAP MDG",
+        id: "fna-treasury",
+        label: "Payments & bank reconciliations (Treasury)",
+        unit: "payment",
+        unitPlural: "payments",
+        baseVolume: 2_940,
+        rate: 35,
+        sourceSystem: "Bank host-to-host",
+      },
+      {
+        id: "fna-botlic",
+        label: "Digital workforce runtime licences",
+        unit: "bot",
+        unitPlural: "bots",
+        baseVolume: 11,
+        rate: BOT_LICENCE_RATE,
+        sourceSystem: "RPA Control Tower",
+      },
+      {
+        id: "fna-bottxn",
+        label: "Transactions executed by the digital workforce",
+        unit: "transaction",
+        unitPlural: "transactions",
+        baseVolume: 41_000,
+        rate: BOT_TXN_RATE,
+        sourceSystem: "RPA Control Tower",
       },
     ],
     fte: [
       { id: "fna-fte-ap", role: "Accounts Payable Operations", baseFte: 8, ratePerFte: 105_000 },
-      { id: "fna-fte-gl", role: "General Ledger & Reporting", baseFte: 6, ratePerFte: 145_000 },
       { id: "fna-fte-ar", role: "Accounts Receivable & Collections", baseFte: 4, ratePerFte: 120_000 },
-      { id: "fna-fte-fpa", role: "FP&A / Management Reporting", baseFte: 3, ratePerFte: 185_000 },
-      { id: "fna-fte-md", role: "Master Data Management", baseFte: 2, ratePerFte: 95_000 },
+      { id: "fna-fte-travel", role: "Travel & Expense Desk", baseFte: 2, ratePerFte: 92_000 },
+      { id: "fna-fte-r2r", role: "Record to Report", baseFte: 6, ratePerFte: 145_000 },
+      { id: "fna-fte-treasury", role: "Treasury Operations", baseFte: 2, ratePerFte: 150_000 },
     ],
     // Steady growth with a visible October dip and a March year-end spike.
     seasonality: [0.842, 0.858, 0.877, 0.869, 0.901, 0.933, 0.918, 1.0, 1.014, 1.037, 1.055, 1.134],
@@ -127,6 +160,8 @@ export const BLUEPRINTS: Record<ServiceId, ServiceBlueprint> = {
       { id: "openExceptions", base: 215 },
       { id: "pendingApproval", base: 486 },
       { id: "disputedInvoices", base: 62 },
+      { id: "unreconciledBankItems", base: 48 },
+      { id: "openArItems", base: 340 },
     ],
     quality: {
       rejectionRate: 3.4,
@@ -135,15 +170,21 @@ export const BLUEPRINTS: Record<ServiceId, ServiceBlueprint> = {
       avgProcessingDays: 4.2,
       touchlessRate: 71.4,
       daysPayableOutstanding: 46.8,
+      closeCycleDays: 3.4,
+      collectionEffectiveness: 91.2,
+      travelSettlementDays: 3.1,
+      bankReconAccuracy: 99.2,
     },
   },
 
-  /* ---------------------------------------------------------------- */
-  hr: {
-    serviceId: "hr",
+  /* ================================================================ */
+  /* HR Ops — TA · Payroll · L&D · Core HR (SAP SuccessFactors)       */
+  /* ================================================================ */
+  hrops: {
+    serviceId: "hrops",
     txn: [
       {
-        id: "hr-payroll",
+        id: "hrops-payroll",
         label: "Payroll records processed",
         unit: "payslip",
         unitPlural: "payslips",
@@ -152,37 +193,56 @@ export const BLUEPRINTS: Record<ServiceId, ServiceBlueprint> = {
         sourceSystem: "Payroll engine",
       },
       {
-        id: "hr-hiring",
-        label: "Recruitment mandates closed",
+        id: "hrops-ta",
+        label: "Recruitment mandates closed (TA)",
         unit: "mandate",
         unitPlural: "mandates",
         baseVolume: 9.7,
         rate: 22_000,
-        sourceSystem: "SuccessFactors",
+        sourceSystem: "SAP SuccessFactors",
       },
       {
-        id: "hr-lifecycle",
-        label: "Onboarding & exit formalities",
+        id: "hrops-lnd",
+        label: "Learning & development enrolments",
+        unit: "enrolment",
+        unitPlural: "enrolments",
+        baseVolume: 640,
+        rate: 350,
+        sourceSystem: "SAP SuccessFactors",
+      },
+      {
+        id: "hrops-core",
+        label: "Employee lifecycle & helpdesk cases",
         unit: "case",
         unitPlural: "cases",
-        baseVolume: 118,
-        rate: 1_200,
-        sourceSystem: "Darwinbox",
+        baseVolume: 2_058,
+        rate: 45,
+        sourceSystem: "SAP SuccessFactors",
       },
       {
-        id: "hr-helpdesk",
-        label: "Employee helpdesk tickets resolved",
-        unit: "ticket",
-        unitPlural: "tickets",
-        baseVolume: 1_940,
-        rate: 45,
-        sourceSystem: "Darwinbox",
+        id: "hrops-botlic",
+        label: "Digital workforce runtime licences",
+        unit: "bot",
+        unitPlural: "bots",
+        baseVolume: 5,
+        rate: BOT_LICENCE_RATE,
+        sourceSystem: "RPA Control Tower",
+      },
+      {
+        id: "hrops-bottxn",
+        label: "Transactions executed by the digital workforce",
+        unit: "transaction",
+        unitPlural: "transactions",
+        baseVolume: 12_000,
+        rate: BOT_TXN_RATE,
+        sourceSystem: "RPA Control Tower",
       },
     ],
     fte: [
-      { id: "hr-fte-ops", role: "HR Operations & Payroll", baseFte: 5, ratePerFte: 105_000 },
-      { id: "hr-fte-ta", role: "Talent Acquisition", baseFte: 4, ratePerFte: 115_000 },
-      { id: "hr-fte-hrbp", role: "HR Business Partner", baseFte: 1, ratePerFte: 160_000 },
+      { id: "hrops-fte-payroll", role: "HR Operations & Payroll", baseFte: 5, ratePerFte: 105_000 },
+      { id: "hrops-fte-ta", role: "Talent Acquisition", baseFte: 4, ratePerFte: 115_000 },
+      { id: "hrops-fte-lnd", role: "Learning & Development", baseFte: 2, ratePerFte: 110_000 },
+      { id: "hrops-fte-sf", role: "SAP SuccessFactors Support", baseFte: 1, ratePerFte: 135_000 },
     ],
     // Hiring peaks Jun–Aug, softens over the December/January holidays.
     seasonality: [0.912, 0.968, 1.045, 1.088, 1.062, 1.021, 0.974, 1.0, 0.936, 0.905, 0.958, 1.014],
@@ -193,6 +253,7 @@ export const BLUEPRINTS: Record<ServiceId, ServiceBlueprint> = {
       { id: "positionsInProgress", base: 48 },
       { id: "offersPending", base: 19 },
       { id: "headcountServed", base: 12_400 },
+      { id: "trainingBacklog", base: 74 },
     ],
     quality: {
       timeToHireDays: 42,
@@ -201,25 +262,199 @@ export const BLUEPRINTS: Record<ServiceId, ServiceBlueprint> = {
       payrollAccuracy: 99.4,
       helpdeskFirstResponseHrs: 3.8,
       attritionRate: 11.6,
+      trainingCompletionRate: 82.4,
+      learningHoursPerEmployee: 9.6,
+      exceptionRate: 1.5,
     },
   },
 
-  /* ---------------------------------------------------------------- */
-  tax: {
-    serviceId: "tax",
+  /* ================================================================ */
+  /* Procurement & Contracts                                          */
+  /* ================================================================ */
+  procurement: {
+    serviceId: "procurement",
     txn: [
       {
-        id: "tax-filing",
-        label: "Statutory returns & filings",
+        id: "proc-pr",
+        label: "Requisitions converted to purchase orders",
+        unit: "requisition",
+        unitPlural: "requisitions",
+        baseVolume: 3_480,
+        rate: 90,
+        sourceSystem: "SAP Ariba",
+      },
+      {
+        id: "proc-rfx",
+        label: "Sourcing events run (RFx)",
+        unit: "event",
+        unitPlural: "events",
+        baseVolume: 42,
+        rate: 9_500,
+        sourceSystem: "SAP Ariba",
+      },
+      {
+        id: "proc-contract",
+        label: "Contracts drafted, renewed & filed",
+        unit: "contract",
+        unitPlural: "contracts",
+        baseVolume: 96,
+        rate: 6_500,
+        sourceSystem: "SAP Ariba",
+      },
+      {
+        id: "proc-vendor",
+        label: "Vendor records onboarded & maintained",
+        unit: "record",
+        unitPlural: "records",
+        baseVolume: 640,
+        rate: 60,
+        sourceSystem: "SAP MDG",
+      },
+      {
+        id: "procurement-botlic",
+        label: "Digital workforce runtime licences",
+        unit: "bot",
+        unitPlural: "bots",
+        baseVolume: 3,
+        rate: BOT_LICENCE_RATE,
+        sourceSystem: "RPA Control Tower",
+      },
+      {
+        id: "procurement-bottxn",
+        label: "Transactions executed by the digital workforce",
+        unit: "transaction",
+        unitPlural: "transactions",
+        baseVolume: 8_400,
+        rate: BOT_TXN_RATE,
+        sourceSystem: "RPA Control Tower",
+      },
+    ],
+    fte: [
+      { id: "proc-fte-sourcing", role: "Sourcing & Category Support", baseFte: 4, ratePerFte: 135_000 },
+      { id: "proc-fte-clm", role: "Contract Management", baseFte: 3, ratePerFte: 145_000 },
+      { id: "proc-fte-vendor", role: "Vendor Master & Helpdesk", baseFte: 2, ratePerFte: 95_000 },
+    ],
+    // Budget release lifts Q1, and a pre-year-end contracting push lifts March.
+    seasonality: [0.938, 1.021, 1.076, 1.048, 0.982, 1.058, 0.966, 1.0, 1.032, 0.958, 1.016, 1.184],
+    fteRamp: [0.9, 0.9, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.05, 1.05],
+    budgetVariancePct: 2.2,
+    stocks: [
+      { id: "openRequisitions", base: 214 },
+      { id: "contractsExpiring90", base: 38 },
+      { id: "vendorsPendingOnboarding", base: 46 },
+      { id: "openPurchaseOrders", base: 512 },
+    ],
+    quality: {
+      prToPoDays: 3.4,
+      savingsRate: 4.6,
+      contractOnTimeRate: 95.8,
+      vendorOnboardingDays: 2.8,
+      spendUnderManagementPct: 78.4,
+      maverickSpendRate: 6.2,
+      exceptionRate: 2.4,
+      firstTimeRight: 95.6,
+    },
+  },
+
+  /* ================================================================ */
+  /* IDT — Indirect Tax                                               */
+  /* ================================================================ */
+  idt: {
+    serviceId: "idt",
+    txn: [
+      {
+        id: "idt-return",
+        label: "GST returns filed (GSTR-1, 3B, 9)",
         unit: "return",
         unitPlural: "returns",
-        baseVolume: 68,
+        baseVolume: 34,
         rate: 4_200,
         sourceSystem: "GSTN portal",
       },
       {
-        id: "tax-tds",
-        label: "TDS / withholding certificates",
+        id: "idt-einvoice",
+        label: "E-invoices & e-way bills generated",
+        unit: "document",
+        unitPlural: "documents",
+        baseVolume: 9_600,
+        rate: 8,
+        sourceSystem: "IRP / NIC e-invoice",
+      },
+      {
+        id: "idt-itc",
+        label: "Input credit lines reconciled to GSTR-2B",
+        unit: "line",
+        unitPlural: "lines",
+        baseVolume: 7_400,
+        rate: 6,
+        sourceSystem: "GSTN portal",
+      },
+      {
+        id: "idt-notice",
+        label: "GST notices & assessments handled",
+        unit: "case",
+        unitPlural: "cases",
+        baseVolume: 12,
+        rate: 11_000,
+        sourceSystem: "SAP S/4HANA",
+      },
+      {
+        id: "idt-advisory",
+        label: "Indirect tax advisory queries",
+        unit: "query",
+        unitPlural: "queries",
+        baseVolume: 64,
+        rate: 800,
+        sourceSystem: "Service desk",
+      },
+      {
+        id: "idt-botlic",
+        label: "Digital workforce runtime licences",
+        unit: "bot",
+        unitPlural: "bots",
+        baseVolume: 3,
+        rate: BOT_LICENCE_RATE,
+        sourceSystem: "RPA Control Tower",
+      },
+      {
+        id: "idt-bottxn",
+        label: "Transactions executed by the digital workforce",
+        unit: "transaction",
+        unitPlural: "transactions",
+        baseVolume: 5_600,
+        rate: BOT_TXN_RATE,
+        sourceSystem: "RPA Control Tower",
+      },
+    ],
+    fte: [{ id: "idt-fte-spec", role: "Indirect Tax Specialist", baseFte: 3, ratePerFte: 155_000 }],
+    // GST filing calendar: Sep annual return, Jan and Mar reconciliation pushes.
+    seasonality: [0.918, 0.946, 0.982, 1.044, 0.962, 1.218, 1.076, 1.0, 0.938, 1.124, 0.968, 1.162],
+    fteRamp: [0.95, 0.95, 0.95, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.05, 1.05, 1.1],
+    budgetVariancePct: 1.1,
+    stocks: [
+      { id: "openGstNotices", base: 9 },
+      { id: "unmatchedItcValue", base: 41_00_000 },
+      { id: "openIdtLitigation", base: 8 },
+    ],
+    quality: {
+      filingOnTimeRate: 99.4,
+      inputCreditMatchRate: 97.8,
+      eInvoiceSuccessRate: 99.7,
+      noticeResponseDays: 5.2,
+      avgTurnaroundDays: 3.6,
+      exceptionRate: 1.4,
+    },
+  },
+
+  /* ================================================================ */
+  /* DT — Direct Tax                                                  */
+  /* ================================================================ */
+  dt: {
+    serviceId: "dt",
+    txn: [
+      {
+        id: "dt-cert",
+        label: "TDS / withholding certificates issued",
         unit: "certificate",
         unitPlural: "certificates",
         baseVolume: 402,
@@ -227,139 +462,77 @@ export const BLUEPRINTS: Record<ServiceId, ServiceBlueprint> = {
         sourceSystem: "TRACES",
       },
       {
-        id: "tax-notice",
-        label: "Notices & assessments handled",
+        id: "dt-return",
+        label: "Direct tax returns & statements filed",
+        unit: "filing",
+        unitPlural: "filings",
+        baseVolume: 18,
+        rate: 6_500,
+        sourceSystem: "Income Tax portal",
+      },
+      {
+        id: "dt-assessment",
+        label: "Assessments & notices handled",
         unit: "case",
         unitPlural: "cases",
-        baseVolume: 22,
-        rate: 11_000,
+        baseVolume: 10,
+        rate: 14_000,
+        sourceSystem: "Income Tax portal",
+      },
+      {
+        id: "dt-tp",
+        label: "Transfer pricing documentation sets",
+        unit: "set",
+        unitPlural: "sets",
+        baseVolume: 3,
+        rate: 45_000,
         sourceSystem: "SAP S/4HANA",
       },
       {
-        id: "tax-advisory",
-        label: "Advisory & taxability queries",
+        id: "dt-advisory",
+        label: "Direct tax advisory queries",
         unit: "query",
         unitPlural: "queries",
-        baseVolume: 110,
-        rate: 800,
+        baseVolume: 46,
+        rate: 900,
         sourceSystem: "Service desk",
       },
-    ],
-    fte: [{ id: "tax-fte-spec", role: "Direct & Indirect Tax Specialist", baseFte: 3, ratePerFte: 155_000 }],
-    // Filing calendar drives the shape: Jul, Sep, Oct, Jan and Mar all spike.
-    seasonality: [0.884, 0.851, 0.966, 1.128, 0.892, 1.164, 1.058, 1.0, 0.918, 1.142, 0.905, 1.238],
-    fteRamp: [0.95, 0.95, 0.95, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.05, 1.05, 1.1],
-    budgetVariancePct: 1.1,
-    stocks: [
-      { id: "openLitigation", base: 14 },
-      { id: "pendingNotices", base: 9 },
-      { id: "disputedTaxValue", base: 34_600_000 },
-    ],
-    quality: {
-      filingOnTimeRate: 99.4,
-      avgTurnaroundDays: 3.6,
-      exceptionRate: 1.4,
-      noticeResponseDays: 5.2,
-      inputCreditMatchRate: 97.8,
-    },
-  },
-
-  /* ---------------------------------------------------------------- */
-  automation: {
-    serviceId: "automation",
-    txn: [
       {
-        id: "auto-licence",
-        label: "Bot & agent runtime licences",
+        id: "dt-botlic",
+        label: "Digital workforce runtime licences",
         unit: "bot",
         unitPlural: "bots",
-        baseVolume: 24,
-        rate: 26_000,
+        baseVolume: 2,
+        rate: BOT_LICENCE_RATE,
         sourceSystem: "RPA Control Tower",
       },
       {
-        id: "auto-txn",
-        label: "Transactions executed by digital workforce",
+        id: "dt-bottxn",
+        label: "Transactions executed by the digital workforce",
         unit: "transaction",
         unitPlural: "transactions",
-        baseVolume: 68_400,
-        rate: 4.5,
+        baseVolume: 3_400,
+        rate: BOT_TXN_RATE,
         sourceSystem: "RPA Control Tower",
       },
-      {
-        id: "auto-build",
-        label: "New automations delivered",
-        unit: "automation",
-        unitPlural: "automations",
-        baseVolume: 2,
-        rate: 145_000,
-        sourceSystem: "Automation CoE",
-      },
     ],
-    fte: [{ id: "auto-fte-coe", role: "Automation CoE Engineer", baseFte: 2, ratePerFte: 175_000 }],
-    // Monotonic ramp — the digital workforce is still being built out.
-    seasonality: [0.612, 0.658, 0.712, 0.771, 0.824, 0.876, 0.938, 1.0, 1.048, 1.096, 1.152, 1.214],
-    fteRamp: [0.5, 0.5, 0.5, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.5, 1.5],
-    budgetVariancePct: 11.2,
-    stocks: [{ id: "exceptionsQueued", base: 87 }],
-    quality: {
-      successRate: 98.4,
-      botAvailability: 99.2,
-      exceptionRate: 1.6,
-      minutesSavedPerTxn: 6.5,
-      blendedHourlyCost: 420,
-      automationCoverage: 62.4,
-    },
-  },
-
-  /* ---------------------------------------------------------------- */
-  analytics: {
-    serviceId: "analytics",
-    txn: [
-      {
-        id: "an-platform",
-        label: "Analytics platform subscription",
-        unit: "tenant",
-        unitPlural: "tenants",
-        baseVolume: 1,
-        rate: 320_000,
-        sourceSystem: "Analytics Platform",
-        fixed: true,
-      },
-      {
-        id: "an-products",
-        label: "Active analytics products",
-        unit: "product",
-        unitPlural: "products",
-        baseVolume: 8,
-        rate: 95_000,
-        sourceSystem: "Analytics Platform",
-      },
-      {
-        id: "an-reports",
-        label: "Scheduled reports & data feeds",
-        unit: "report",
-        unitPlural: "reports",
-        baseVolume: 24,
-        rate: 9_000,
-        sourceSystem: "Analytics Platform",
-      },
-    ],
-    fte: [{ id: "an-fte-analyst", role: "Data & Insight Analyst", baseFte: 2, ratePerFte: 165_000 }],
-    // Step growth as each analytics product goes live.
-    seasonality: [0.688, 0.688, 0.792, 0.792, 0.874, 0.912, 0.958, 1.0, 1.042, 1.084, 1.126, 1.168],
-    fteRamp: [0.5, 0.5, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.5, 1.5],
-    budgetVariancePct: 5.8,
+    fte: [{ id: "dt-fte-spec", role: "Direct Tax Specialist", baseFte: 2, ratePerFte: 165_000 }],
+    // Quarterly TDS statements plus advance tax instalments in Jun, Sep, Dec, Mar.
+    seasonality: [0.884, 0.942, 1.138, 0.924, 0.958, 1.176, 0.942, 1.0, 1.164, 0.982, 0.948, 1.262],
+    fteRamp: [0.95, 0.95, 0.95, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.05, 1.05, 1.1],
+    budgetVariancePct: 0.8,
     stocks: [
-      { id: "insightsGenerated", base: 86 },
-      { id: "activeUsers", base: 214 },
+      { id: "openAssessments", base: 11 },
+      { id: "disputedTaxValue", base: 3_46_00_000 },
+      { id: "lowerDeductionCerts", base: 24 },
     ],
     quality: {
-      onTimeDelivery: 98.1,
-      dataFreshness: 96.8,
-      insightTatDays: 4.4,
-      dashboardAvailability: 99.5,
-      adoptionRate: 68.2,
+      tdsOnTimeRate: 99.2,
+      certOnTimeRate: 98.6,
+      assessmentResponseDays: 7.4,
+      avgTurnaroundDays: 3.9,
+      exceptionRate: 1.2,
+      taxProvisionAccuracy: 98.4,
     },
   },
 };
@@ -370,6 +543,7 @@ export const BLUEPRINTS: Record<ServiceId, ServiceBlueprint> = {
  * inside the tower. Showing the decomposition is what lets a CFO see *which*
  * part of the service is dragging.
  *
+ * There is exactly one component per sub-service named in `SERVICES`.
  * Weights sum to 1.00 per service; `actual` is the DIAL baseline.
  */
 export const SLA_COMPONENTS: Record<
@@ -377,65 +551,78 @@ export const SLA_COMPONENTS: Record<
   { id: string; label: string; weight: number; actual: number; target: number }[]
 > = {
   fna: [
-    { id: "fna-sla-ap", label: "AP invoice processing within TAT", weight: 0.45, actual: 96.2, target: 95 },
-    { id: "fna-sla-ar", label: "Customer invoicing on schedule", weight: 0.2, actual: 97.9, target: 95 },
-    { id: "fna-sla-gl", label: "Month-end close & reporting", weight: 0.2, actual: 98.4, target: 97 },
-    { id: "fna-sla-exp", label: "Expense claim settlement", weight: 0.1, actual: 95.1, target: 95 },
-    { id: "fna-sla-md", label: "Master data request TAT", weight: 0.05, actual: 94.0, target: 95 },
+    { id: "fna-sla-ap", label: "AP invoice processing within TAT", weight: 0.3, actual: 96.2, target: 95 },
+    { id: "fna-sla-ar", label: "AR invoicing & collections on schedule", weight: 0.2, actual: 97.9, target: 95 },
+    { id: "fna-sla-travel", label: "Travel & expense claim settlement", weight: 0.12, actual: 95.1, target: 95 },
+    { id: "fna-sla-r2r", label: "Record to report — close & reconciliations", weight: 0.26, actual: 98.4, target: 97 },
+    { id: "fna-sla-treasury", label: "Treasury payment runs & bank reconciliation", weight: 0.12, actual: 97.6, target: 96 },
   ],
-  hr: [
-    { id: "hr-sla-payroll", label: "Payroll processed on time", weight: 0.55, actual: 99.1, target: 99 },
-    { id: "hr-sla-helpdesk", label: "Helpdesk ticket resolution", weight: 0.25, actual: 96.4, target: 95 },
-    { id: "hr-sla-lifecycle", label: "Onboarding & exit completion", weight: 0.1, actual: 95.0, target: 95 },
-    { id: "hr-sla-ta", label: "Talent acquisition within TAT", weight: 0.1, actual: 60.0, target: 90 },
+  hrops: [
+    { id: "hrops-sla-payroll", label: "Payroll processed on time", weight: 0.45, actual: 99.1, target: 99 },
+    { id: "hrops-sla-ta", label: "Talent acquisition within stage TAT", weight: 0.15, actual: 60.0, target: 90 },
+    { id: "hrops-sla-lnd", label: "Learning programmes delivered to calendar", weight: 0.15, actual: 94.6, target: 95 },
+    { id: "hrops-sla-core", label: "Employee lifecycle & helpdesk resolution", weight: 0.25, actual: 96.4, target: 95 },
   ],
-  tax: [
-    { id: "tax-sla-filing", label: "Statutory filings before due date", weight: 0.4, actual: 99.4, target: 100 },
-    { id: "tax-sla-tds", label: "TDS certificates issued on time", weight: 0.25, actual: 98.6, target: 98 },
-    { id: "tax-sla-notice", label: "Notice response within TAT", weight: 0.2, actual: 95.2, target: 95 },
-    { id: "tax-sla-advisory", label: "Advisory query turnaround", weight: 0.15, actual: 97.1, target: 95 },
+  procurement: [
+    { id: "proc-sla-po", label: "Requisition to purchase order within TAT", weight: 0.3, actual: 96.4, target: 95 },
+    { id: "proc-sla-sourcing", label: "Sourcing events run to agreed cycle", weight: 0.2, actual: 94.2, target: 95 },
+    { id: "proc-sla-contract", label: "Contracts renewed before expiry", weight: 0.25, actual: 95.8, target: 95 },
+    { id: "proc-sla-vendor", label: "Vendor onboarding & master data TAT", weight: 0.25, actual: 94.0, target: 95 },
   ],
-  automation: [
-    { id: "auto-sla-avail", label: "Bot availability", weight: 0.35, actual: 99.2, target: 99 },
-    { id: "auto-sla-success", label: "Job success rate", weight: 0.4, actual: 98.4, target: 97 },
-    { id: "auto-sla-exception", label: "Exception resolution within TAT", weight: 0.15, actual: 96.8, target: 95 },
-    { id: "auto-sla-change", label: "Change delivery on schedule", weight: 0.1, actual: 97.5, target: 95 },
+  idt: [
+    { id: "idt-sla-filing", label: "GST returns filed before due date", weight: 0.4, actual: 99.4, target: 100 },
+    { id: "idt-sla-einvoice", label: "E-invoice & e-way bill generation success", weight: 0.2, actual: 99.7, target: 99 },
+    { id: "idt-sla-itc", label: "Input credit reconciled to GSTR-2B", weight: 0.25, actual: 97.8, target: 98 },
+    { id: "idt-sla-notice", label: "GST notice response within TAT", weight: 0.15, actual: 95.2, target: 95 },
   ],
-  analytics: [
-    { id: "an-sla-delivery", label: "Report delivery on schedule", weight: 0.4, actual: 98.1, target: 97 },
-    { id: "an-sla-fresh", label: "Data freshness within window", weight: 0.3, actual: 96.8, target: 96 },
-    { id: "an-sla-tat", label: "Insight request turnaround", weight: 0.2, actual: 95.4, target: 95 },
-    { id: "an-sla-uptime", label: "Dashboard availability", weight: 0.1, actual: 99.5, target: 99 },
+  dt: [
+    { id: "dt-sla-tds", label: "TDS deposits & statements on time", weight: 0.4, actual: 99.2, target: 100 },
+    { id: "dt-sla-cert", label: "TDS certificates issued on time", weight: 0.2, actual: 98.6, target: 98 },
+    { id: "dt-sla-return", label: "Corporate tax filings before due date", weight: 0.25, actual: 98.1, target: 98 },
+    { id: "dt-sla-assessment", label: "Transfer pricing & assessment support TAT", weight: 0.15, actual: 95.4, target: 95 },
   ],
 };
 
 /**
  * Entity-specific SLA overrides, used where the demo needs a deliberate
- * story. GHIAL's HR tower is the worked example of a service in trouble:
- * the roll-up lands at ~82% against a 90% target.
+ * story. GHIAL's HR Ops tower is the worked example of a service in trouble:
+ * the roll-up lands at ~78% against a 90% target, dragged by talent
+ * acquisition at 38%.
  */
 export const SLA_OVERRIDES: Record<string, Partial<Record<ServiceId, Record<string, number>>>> = {
   ghial: {
-    hr: {
-      "hr-sla-payroll": 92.0,
-      "hr-sla-helpdesk": 80.0,
-      "hr-sla-lifecycle": 76.0,
-      "hr-sla-ta": 38.0,
+    hrops: {
+      "hrops-sla-payroll": 92.0,
+      "hrops-sla-ta": 38.0,
+      "hrops-sla-lnd": 74.0,
+      "hrops-sla-core": 80.0,
     },
   },
   "goa-mopa": {
-    fna: { "fna-sla-ap": 92.8, "fna-sla-md": 89.5 },
+    fna: { "fna-sla-ap": 92.8, "fna-sla-treasury": 91.5 },
   },
   aerocity: {
-    tax: { "tax-sla-notice": 88.4 },
+    idt: { "idt-sla-notice": 88.4 },
+  },
+  ddfs: {
+    procurement: { "proc-sla-vendor": 91.2 },
   },
 };
 
 /** Per-entity CSAT by service, weighted into the headline score. */
 export const CSAT_BASELINE: Record<ServiceId, number> = {
   fna: 4.75,
-  hr: 4.1,
-  tax: 4.8,
-  automation: 4.6,
-  analytics: 4.5,
+  hrops: 4.1,
+  procurement: 4.4,
+  idt: 4.8,
+  dt: 4.7,
+};
+
+/** DIAL baseline SLA per tower — the reference point CSAT is scored against. */
+export const SLA_BASELINE: Record<ServiceId, number> = {
+  fna: 97.15,
+  hrops: 91.89,
+  procurement: 95.21,
+  idt: 98.43,
+  dt: 98.24,
 };

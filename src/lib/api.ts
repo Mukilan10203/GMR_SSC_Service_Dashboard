@@ -223,12 +223,36 @@ export { getEntity };
  * can see where each number would come from — no integration is performed.
  */
 export const DATA_SOURCE_MAP: { area: string; systems: string[]; status: string }[] = [
-  { area: "Finance & Accounting", systems: ["SAP S/4HANA", "SAP Concur", "SAP MDG"], status: "Planned" },
-  { area: "Spend analytics", systems: ["SAP Ariba"], status: "Planned" },
-  { area: "Aero revenue", systems: ["SAP S/4HANA"], status: "Planned" },
-  { area: "Non-aero revenue", systems: ["SAP S/4HANA", "Local IT systems"], status: "Planned" },
-  { area: "Human resources", systems: ["SuccessFactors", "Darwinbox", "Payroll engine"], status: "Planned" },
-  { area: "Taxation", systems: ["GSTN portal", "TRACES", "SAP S/4HANA"], status: "Planned" },
+  {
+    area: "F&A — AP, AR, Travel, R2R, Treasury",
+    systems: ["SAP S/4HANA", "SAP Concur", "Bank host-to-host"],
+    status: "Planned",
+  },
+  {
+    area: "HR Ops — TA, Payroll, L&D, Core HR",
+    systems: ["SAP SuccessFactors", "Payroll engine", "HR service desk"],
+    status: "Planned",
+  },
+  {
+    area: "Procurement & Contracts",
+    systems: ["SAP Ariba", "SAP S/4HANA", "SAP MDG"],
+    status: "Planned",
+  },
+  {
+    area: "Indirect Tax",
+    systems: ["GSTN portal", "IRP / NIC e-invoice", "SAP S/4HANA"],
+    status: "Planned",
+  },
+  {
+    area: "Direct Tax",
+    systems: ["TRACES", "Income Tax portal", "SAP S/4HANA"],
+    status: "Planned",
+  },
   { area: "Automation", systems: ["RPA Control Tower", "AI Agent Platform"], status: "Planned" },
+  {
+    area: "Analytics & revenue",
+    systems: ["SAP S/4HANA", "SAP Ariba", "Local IT systems"],
+    status: "Planned",
+  },
   { area: "Service management", systems: ["SSC Service Management"], status: "Planned" },
 ];

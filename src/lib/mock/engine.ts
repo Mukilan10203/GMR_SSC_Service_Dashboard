@@ -31,22 +31,28 @@ import { gradeAgainstTarget, pctChange, trendFrom } from "../format";
 import { DEMO_AS_OF, getPeriod, getPeriodDefinition, QUARTERS } from "./calendar";
 import { ENTITIES, LOCATIONS, SERVICE_MAP, SERVICES } from "./organisation";
 import {
+  AVG_INVOICE_VALUE,
+  AVG_PO_VALUE,
   BLUEPRINTS,
+  botLicenceLineId,
+  botTxnLineId,
   CSAT_BASELINE,
+  SLA_BASELINE,
   SLA_COMPONENTS,
   SLA_OVERRIDES,
   type FteLineSpec,
   type TxnLineSpec,
 } from "./rate-cards";
-import { KPI_SPECS, type KpiSpec } from "./kpis";
+import { KPI_SPECS } from "./kpis";
 import {
   FEEDBACK_TEMPLATES,
   ISSUE_TEMPLATES,
   RESOLVED_ISSUE_TEMPLATES,
   type IssueTemplate,
 } from "./issues";
-import { AUTOMATION_PIPELINE, BOT_FLEET } from "./automation-fleet";
+import { AUTOMATION_PIPELINE, AUTOMATION_PLATFORM, BOT_FLEET } from "./automation-fleet";
 import {
+  ANALYTICS_FOOTPRINT,
   ANALYTICS_PRODUCTS,
   FINANCIAL_BASELINE,
   type FinancialContext,
@@ -461,16 +467,16 @@ function buildMetricContext(
   period: Period,
   vols: ServiceVolumes,
   sla: ServiceSla,
-  extra: MetricContext,
 ): MetricContext {
   const q = BLUEPRINTS[serviceId].quality;
   const d = entity.opsDelta; // negative = weaker delivery
   const cur = vols.currentIndex;
   const comp = (id: string) => sla.components.find((c) => c.id === id)?.actual;
 
-  const ctx: MetricContext = { sla: sla.overall, ...extra };
+  const ctx: MetricContext = { sla: sla.overall };
 
   switch (serviceId) {
+    /* ---- F&A: AP · AR · Travel · Record to Report · Treasury ------- */
     case "fna": {
       ctx.avgProcessingDays = round2(q.avgProcessingDays - d * 0.18);
       ctx.rejectionRate = round2(clamp(q.rejectionRate - d * 0.32, 0.5, 20));
@@ -478,48 +484,94 @@ function buildMetricContext(
       ctx.firstTimeRight = round2(clamp(q.firstTimeRight + d * 0.55, 60, 100));
       ctx.touchlessRate = round2(clamp(q.touchlessRate + d * 1.2, 20, 100));
       ctx.daysPayableOutstanding = round2(q.daysPayableOutstanding - d * 0.6);
+      ctx.closeCycleDays = round2(Math.max(1, q.closeCycleDays - d * 0.12));
+      ctx.collectionEffectiveness =
+        round2(clamp(q.collectionEffectiveness + d * 0.7, 50, 100));
+      ctx.travelSettlementDays = round2(Math.max(0.5, q.travelSettlementDays - d * 0.15));
+      ctx.bankReconAccuracy = comp("fna-sla-treasury")
+        ? round2(clamp(q.bankReconAccuracy + (comp("fna-sla-treasury")! - 97.6) * 0.28, 80, 100))
+        : round2(clamp(q.bankReconAccuracy + d * 0.1, 80, 100));
       ctx.lateInvoiceShare = clamp((ctx.avgProcessingDays / 5) * 0.11, 0.02, 0.45);
       ctx.reworkShare = (100 - ctx.firstTimeRight) / 100;
       ctx.rejectionShare = ctx.rejectionRate / 100;
       ctx.exceptionShare = ctx.exceptionRate / 100;
+      ctx.arOverdueShare = (100 - ctx.collectionEffectiveness) / 100;
+      ctx.lateClaimShare = clamp((ctx.travelSettlementDays / 4) * 0.14, 0.02, 0.5);
+      ctx.bankBreakShare = (100 - ctx.bankReconAccuracy) / 100;
       break;
     }
-    case "hr": {
+
+    /* ---- HR Ops: TA · Payroll · L&D · Core HR ---------------------- */
+    case "hrops": {
       ctx.timeToHireDays = round2(q.timeToHireDays - d * 1.6);
-      ctx.talentAcquisitionSla = comp("hr-sla-ta") ?? round2(clamp(q.talentAcquisitionSla + d * 3.5, 20, 100));
+      ctx.talentAcquisitionSla =
+        comp("hrops-sla-ta") ?? round2(clamp(q.talentAcquisitionSla + d * 3.5, 20, 100));
       ctx.payrollAccuracy = round2(clamp(q.payrollAccuracy + d * 0.28, 90, 100));
       ctx.candidateExperience = round2(clamp(q.candidateExperience + d * 0.12, 1, 5));
       ctx.attritionRate = round2(clamp(q.attritionRate - d * 0.5, 2, 40));
-      ctx.helpdeskFirstResponseHrs = round2(q.helpdeskFirstResponseHrs - d * 0.3);
+      ctx.helpdeskFirstResponseHrs = round2(Math.max(0.5, q.helpdeskFirstResponseHrs - d * 0.3));
+      ctx.trainingCompletionRate =
+        comp("hrops-sla-lnd") !== undefined
+          ? round2(clamp(q.trainingCompletionRate + (comp("hrops-sla-lnd")! - 94.6) * 0.42, 20, 100))
+          : round2(clamp(q.trainingCompletionRate + d * 1.4, 20, 100));
+      ctx.learningHoursPerEmployee = round2(clamp(q.learningHoursPerEmployee + d * 0.4, 1, 40));
+      ctx.exceptionRate = round2(clamp(q.exceptionRate - d * 0.16, 0.2, 12));
       ctx.taBreachShare = (100 - ctx.talentAcquisitionSla) / 100;
       ctx.lateHireShare = clamp((ctx.timeToHireDays / 45) * 0.24, 0.05, 0.7);
       ctx.payrollErrorShare = (100 - ctx.payrollAccuracy) / 100;
+      ctx.trainingIncompleteShare = (100 - ctx.trainingCompletionRate) / 100;
+      ctx.slowResponseShare = clamp((ctx.helpdeskFirstResponseHrs / 4) * 0.13, 0.02, 0.6);
       break;
     }
-    case "tax": {
-      ctx.filingOnTimeRate = comp("tax-sla-filing") ?? round2(clamp(q.filingOnTimeRate + d * 0.3, 80, 100));
-      ctx.avgTurnaroundDays = round2(q.avgTurnaroundDays - d * 0.22);
-      ctx.noticeResponseDays = round2(q.noticeResponseDays - d * 0.5);
-      ctx.inputCreditMatchRate = round2(clamp(q.inputCreditMatchRate + d * 0.6, 80, 100));
+
+    /* ---- Procurement & Contracts ----------------------------------- */
+    case "procurement": {
+      ctx.prToPoDays = round2(Math.max(0.5, q.prToPoDays - d * 0.14));
+      ctx.savingsRate = round2(clamp(q.savingsRate + d * 0.22, 0.5, 15));
+      ctx.contractOnTimeRate =
+        comp("proc-sla-contract") ?? round2(clamp(q.contractOnTimeRate + d * 0.4, 60, 100));
+      ctx.vendorOnboardingDays = round2(Math.max(0.5, q.vendorOnboardingDays - d * 0.12));
+      ctx.spendUnderManagementPct = round2(clamp(q.spendUnderManagementPct + d * 1.5, 30, 100));
+      ctx.maverickSpendRate = round2(clamp(q.maverickSpendRate - d * 0.3, 0.5, 25));
+      ctx.exceptionRate = round2(clamp(q.exceptionRate - d * 0.2, 0.3, 15));
+      ctx.firstTimeRight = round2(clamp(q.firstTimeRight + d * 0.5, 60, 100));
+      ctx.latePoShare = clamp((ctx.prToPoDays / 4) * 0.16, 0.02, 0.6);
+      ctx.lateContractShare = (100 - ctx.contractOnTimeRate) / 100;
+      ctx.lateVendorShare = clamp((ctx.vendorOnboardingDays / 3) * 0.14, 0.02, 0.5);
+      break;
+    }
+
+    /* ---- Indirect Tax ---------------------------------------------- */
+    case "idt": {
+      ctx.filingOnTimeRate =
+        comp("idt-sla-filing") ?? round2(clamp(q.filingOnTimeRate + d * 0.3, 80, 100));
+      ctx.eInvoiceSuccessRate =
+        comp("idt-sla-einvoice") ?? round2(clamp(q.eInvoiceSuccessRate + d * 0.12, 80, 100));
+      ctx.inputCreditMatchRate =
+        comp("idt-sla-itc") ?? round2(clamp(q.inputCreditMatchRate + d * 0.6, 80, 100));
+      ctx.noticeResponseDays = round2(Math.max(0.5, q.noticeResponseDays - d * 0.5));
+      ctx.avgTurnaroundDays = round2(Math.max(0.5, q.avgTurnaroundDays - d * 0.22));
       ctx.exceptionRate = round2(clamp(q.exceptionRate - d * 0.18, 0.2, 12));
       ctx.lateFilingShare = (100 - ctx.filingOnTimeRate) / 100;
+      ctx.eInvoiceFailShare = (100 - ctx.eInvoiceSuccessRate) / 100;
+      ctx.itcUnmatchedShare = (100 - ctx.inputCreditMatchRate) / 100;
       ctx.lateNoticeShare = clamp((ctx.noticeResponseDays / 5) * 0.18, 0.02, 0.6);
       ctx.lateQueryShare = clamp((ctx.avgTurnaroundDays / 4) * 0.15, 0.02, 0.6);
       break;
     }
-    case "automation": {
-      // successRate / botJobs / roi arrive from the fleet computation.
-      ctx.botAvailability = comp("auto-sla-avail") ?? round2(clamp(q.botAvailability + d * 0.15, 80, 100));
-      ctx.automationCoverage = round2(clamp(q.automationCoverage + d * 2.5, 15, 95));
-      ctx.jobFailureShare = (100 - (ctx.successRate ?? q.successRate)) / 100;
-      break;
-    }
-    case "analytics": {
-      ctx.onTimeDelivery = comp("an-sla-delivery") ?? round2(clamp(q.onTimeDelivery + d * 0.5, 70, 100));
-      ctx.dataFreshness = comp("an-sla-fresh") ?? round2(clamp(q.dataFreshness + d * 0.7, 70, 100));
-      ctx.insightTatDays = round2(q.insightTatDays - d * 0.25);
-      ctx.adoptionRate = round2(clamp(q.adoptionRate + d * 2, 20, 100));
-      ctx.lateReportShare = (100 - ctx.onTimeDelivery) / 100;
+
+    /* ---- Direct Tax ------------------------------------------------- */
+    case "dt": {
+      ctx.tdsOnTimeRate = comp("dt-sla-tds") ?? round2(clamp(q.tdsOnTimeRate + d * 0.3, 80, 100));
+      ctx.certOnTimeRate = comp("dt-sla-cert") ?? round2(clamp(q.certOnTimeRate + d * 0.4, 80, 100));
+      ctx.assessmentResponseDays = round2(Math.max(0.5, q.assessmentResponseDays - d * 0.5));
+      ctx.avgTurnaroundDays = round2(Math.max(0.5, q.avgTurnaroundDays - d * 0.22));
+      ctx.exceptionRate = round2(clamp(q.exceptionRate - d * 0.16, 0.2, 12));
+      ctx.taxProvisionAccuracy = round2(clamp(q.taxProvisionAccuracy + d * 0.25, 80, 100));
+      ctx.lateFilingShare = (100 - ctx.tdsOnTimeRate) / 100;
+      ctx.lateCertShare = (100 - ctx.certOnTimeRate) / 100;
+      ctx.lateAssessmentShare = clamp((ctx.assessmentResponseDays / 7) * 0.2, 0.02, 0.6);
+      ctx.lateQueryShare = clamp((ctx.avgTurnaroundDays / 4) * 0.15, 0.02, 0.6);
       break;
     }
   }
@@ -593,6 +645,7 @@ function buildKpis(
     return {
       id: spec.id,
       serviceId,
+      subServiceId: spec.subServiceId,
       name: spec.name,
       description: spec.description,
       actual,
@@ -778,16 +831,8 @@ function buildCx(
   mix: Record<string, number>,
   feedback: Feedback[],
 ): CustomerExperience {
-  const baselineSla: Record<ServiceId, number> = {
-    fna: 96.76,
-    hr: 94.1,
-    tax: 98.02,
-    automation: 98.35,
-    analytics: 97.31,
-  };
-
   const csatByService = services.map((s) => {
-    const gap = (slas[s]?.overall ?? baselineSla[s]) - baselineSla[s];
+    const gap = (slas[s]?.overall ?? SLA_BASELINE[s]) - SLA_BASELINE[s];
     const score = clamp(round2(CSAT_BASELINE[s] + entity.opsDelta * 0.1 + gap * 0.035), 1, 5);
     return {
       serviceId: s,
@@ -859,81 +904,103 @@ function buildCx(
 /* Automation                                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The control tower.
+ *
+ * Automation is delivered inside the towers, so the fleet is assembled per
+ * service: each service licenses `<service>-botlic` runtimes and bills for
+ * `<service>-bottxn` transactions, and its own bots share that volume out
+ * between them. Summing back up gives a tower that reconciles, per service,
+ * to the lines on the invoice.
+ */
 function buildAutomation(
   entity: Entity,
   period: Period,
   services: ServiceId[],
-  vols: ServiceVolumes,
-  billing: ServiceBilling,
-): { snapshot: AutomationSnapshot; ctx: MetricContext } {
-  const asOf = asOfIso(period);
-  const cur = vols.currentIndex;
-  const q = BLUEPRINTS.automation.quality;
+  volumes: Record<string, ServiceVolumes>,
+  billings: Record<string, ServiceBilling>,
+): AutomationSnapshot {
+  const bots: Bot[] = [];
+  /** Automated transactions per fiscal month, summed across all towers. */
+  const monthlyTxn = period.months.map(() => 0);
+  let automationCostMonth = 0;
 
-  const botCount = vols.txn["auto-licence"][cur];
-  const totalTxn = vols.txn["auto-txn"][cur];
+  for (const s of services) {
+    const vols = volumes[s];
+    const cur = vols.currentIndex;
+    const licences = vols.txn[botLicenceLineId(s)][cur];
+    const txnVolume = vols.txn[botTxnLineId(s)][cur];
 
-  const eligible = BOT_FLEET.filter((b) => services.includes(b.serviceId)).sort(
-    (a, b) => b.share - a.share,
-  );
-  const roster = eligible.slice(0, Math.max(1, Math.min(botCount, eligible.length)));
+    for (let m = 0; m < monthlyTxn.length; m++) {
+      monthlyTxn[m] += vols.txn[botTxnLineId(s)][m];
+    }
 
-  const txnSplit = distribute(
-    totalTxn,
-    roster.map((b) => b.share),
-  );
+    const lines = billings[s].txnLines;
+    automationCostMonth +=
+      (lines.find((l) => l.id === botLicenceLineId(s))?.amount ?? 0) +
+      (lines.find((l) => l.id === botTxnLineId(s))?.amount ?? 0);
 
-  const bots: Bot[] = roster.map((spec, i) => {
-    const transactions = txnSplit[i];
-    const jobs = Math.max(1, Math.round(transactions / spec.itemsPerJob));
-    const failedJobs = Math.round((jobs * (100 - spec.successRate)) / 100);
-    return {
-      id: `${entity.id}-${spec.key}`,
-      name: spec.name,
-      kind: spec.kind,
-      process: spec.process,
-      serviceId: spec.serviceId,
-      status: spec.status,
-      jobs,
-      failedJobs,
-      successRate: round2(((jobs - failedJobs) / jobs) * 100),
-      transactions,
-      hoursSaved: Math.round((transactions * spec.minutesSavedPerTxn) / 60),
-      avgRuntimeMin: spec.avgRuntimeMin,
-      lastRun: `${spec.lastRunHoursAgo}h ago`,
-      owner: spec.owner,
-    };
-  });
+    // The licensed runtimes are the highest-value bots in that tower.
+    const pool = BOT_FLEET.filter((b) => b.serviceId === s).sort((a, b) => b.share - a.share);
+    const roster = pool.slice(0, clamp(licences, 1, pool.length));
+    const txnSplit = distribute(
+      txnVolume,
+      roster.map((b) => b.share),
+    );
+
+    roster.forEach((spec, i) => {
+      const transactions = txnSplit[i];
+      const jobs = Math.max(1, Math.round(transactions / spec.itemsPerJob));
+      const failedJobs = Math.round((jobs * (100 - spec.successRate)) / 100);
+      bots.push({
+        id: `${entity.id}-${spec.key}`,
+        name: spec.name,
+        kind: spec.kind,
+        process: spec.process,
+        serviceId: spec.serviceId,
+        subServiceId: spec.subServiceId,
+        status: spec.status,
+        jobs,
+        failedJobs,
+        successRate: round2(((jobs - failedJobs) / jobs) * 100),
+        transactions,
+        hoursSaved: Math.round((transactions * spec.minutesSavedPerTxn) / 60),
+        avgRuntimeMin: spec.avgRuntimeMin,
+        lastRun: `${spec.lastRunHoursAgo}h ago`,
+        owner: spec.owner,
+      });
+    });
+  }
+
+  bots.sort((a, b) => b.transactions - a.transactions);
 
   const totalJobs = sum(bots.map((b) => b.jobs));
   const failedJobs = sum(bots.map((b) => b.failedJobs));
   const successfulJobs = totalJobs - failedJobs;
   const successRate = round2((successfulJobs / Math.max(1, totalJobs)) * 100);
 
+  const totalTxn = sum(bots.map((b) => b.transactions));
   const hoursSavedMonth = sum(bots.map((b) => b.hoursSaved));
-  const seasonality = BLUEPRINTS.automation.seasonality;
-  const ytdRatio = sum(seasonality.slice(0, vols.actualCount)) / seasonality[cur];
-  const hoursSavedYtd = Math.round(hoursSavedMonth * ytdRatio);
-
-  const blendedHourlyCost = q.blendedHourlyCost;
-  const costSavingMonth = hoursSavedMonth * blendedHourlyCost;
-  const costSavingYtd = hoursSavedYtd * blendedHourlyCost;
-  const automationCostMonth = billing.currentTotal;
-  const roi = round2(costSavingMonth / Math.max(1, automationCostMonth));
-
+  // Hours track automated volume, so the monthly shape is the volume shape.
+  const hoursPerTxn = hoursSavedMonth / Math.max(1, totalTxn);
   const monthlyHoursSaved = period.months.map((mo, m) => ({
     short: mo.short,
-    value: Math.round((hoursSavedMonth * seasonality[m]) / seasonality[cur]),
+    value: Math.round(monthlyTxn[m] * hoursPerTxn),
     isActual: mo.isActual,
   }));
+  const hoursSavedYtd = sum(monthlyHoursSaved.filter((m) => m.isActual).map((m) => m.value));
 
-  const scaleFactor = entity.scale;
+  const blendedHourlyCost = AUTOMATION_PLATFORM.blendedHourlyCost;
+  const costSavingMonth = hoursSavedMonth * blendedHourlyCost;
+  const costSavingYtd = hoursSavedYtd * blendedHourlyCost;
+  const roi = round2(costSavingMonth / Math.max(1, automationCostMonth));
+
   const pipeline = AUTOMATION_PIPELINE.map((p) => ({
     ...p,
-    estHoursMonth: Math.max(8, Math.round(p.estHoursMonth * scaleFactor)),
+    estHoursMonth: Math.max(8, Math.round(p.estHoursMonth * entity.scale)),
   }));
 
-  const snapshot: AutomationSnapshot = {
+  return {
     bots,
     totalBots: bots.length,
     activeBots: bots.filter((b) => b.status === "running").length,
@@ -944,7 +1011,7 @@ function buildAutomation(
     failedJobs,
     successRate,
     transactionsAutomated: totalTxn,
-    exceptions: stockValue("automation", "exceptionsQueued", entity, period),
+    exceptions: Math.max(1, Math.round(totalTxn * AUTOMATION_PLATFORM.exceptionRatePerTxn)),
     hoursSavedMonth,
     hoursSavedYtd,
     costSavingMonth,
@@ -954,12 +1021,10 @@ function buildAutomation(
     roi,
     blendedHourlyCost,
     monthlyHoursSaved,
-    automationCoverage: clamp(q.automationCoverage + entity.opsDelta * 2.5, 15, 95) / 100,
+    automationCoverage:
+      clamp(AUTOMATION_PLATFORM.automationCoverage + entity.opsDelta * 2.5, 15, 95) / 100,
     pipeline,
   };
-
-  void asOf;
-  return { snapshot, ctx: { successRate, botJobs: totalJobs, roi } };
 }
 
 /* ------------------------------------------------------------------ */
@@ -993,29 +1058,33 @@ function financialContext(entity: Entity, period: Period): FinancialContext {
   };
 }
 
-function buildAnalytics(
-  entity: Entity,
-  period: Period,
-  vols: ServiceVolumes,
-  fin: FinancialContext,
-): AnalyticsSnapshot {
+/**
+ * Analytics is a capability, not a contracted tower: the SSC builds these
+ * products on the transaction data the five towers already process, so the
+ * footprint scales with the size of the entity rather than with a billed
+ * volume. Nothing here appears on the invoice.
+ */
+function buildAnalytics(entity: Entity, period: Period, fin: FinancialContext): AnalyticsSnapshot {
   /** Products name their headline by key; only numeric fields are valid. */
   const finNumber = (key: string): number => {
     const v = (fin as unknown as Record<string, unknown>)[key];
     return typeof v === "number" ? v : 0;
   };
-  const cur = vols.currentIndex;
-  const productCount = clamp(vols.txn["an-products"][cur], 1, ANALYTICS_PRODUCTS.length);
+  const f = getPeriodDefinition(period.id).volumeFactor * entity.scale;
+
+  const productCount = clamp(
+    Math.round(ANALYTICS_FOOTPRINT.products * (0.45 + 0.55 * entity.scale)),
+    3,
+    ANALYTICS_PRODUCTS.length,
+  );
   const specs = [...ANALYTICS_PRODUCTS].sort((a, b) => a.rank - b.rank).slice(0, productCount);
 
-  const totalReports = vols.txn["an-reports"][cur];
-  const totalInsights = stockValue("analytics", "insightsGenerated", entity, period);
-  const activeUsers = stockValue("analytics", "activeUsers", entity, period);
+  const totalReports = Math.max(4, Math.round(ANALYTICS_FOOTPRINT.reports * f));
+  const totalInsights = Math.max(8, Math.round(ANALYTICS_FOOTPRINT.insights * f));
+  const activeUsers = Math.max(6, Math.round(ANALYTICS_FOOTPRINT.activeUsers * f));
 
   const reportSplit = distribute(totalReports, specs.map((s) => s.reports));
   const insightSplit = distribute(totalInsights, specs.map((s) => s.insights));
-
-  const scaleF = getPeriodDefinition(period.id).volumeFactor * entity.scale;
 
   const products: AnalyticsProduct[] = specs.map((s, i) => {
     const headlineValue = finNumber(s.headlineKey);
@@ -1052,7 +1121,7 @@ function buildAnalytics(
     totalReports,
     totalInsights,
     activeUsers,
-    valueIdentified: sum(specs.map((s) => s.valueIdentified)) * scaleF,
+    valueIdentified: sum(specs.map((s) => s.valueIdentified)) * f,
   };
 }
 
@@ -1065,7 +1134,6 @@ function primaryActivity(
   vols: ServiceVolumes,
   period: Period,
 ): ServiceSnapshot["activityChart"] {
-  const bp = BLUEPRINTS[serviceId];
   const seriesFor = (lineIds: string[], title: string, unit: string) => ({
     title,
     unit,
@@ -1078,24 +1146,24 @@ function primaryActivity(
 
   switch (serviceId) {
     case "fna":
-      return seriesFor(["fna-ap"], "Invoices processed", "invoices");
-    case "hr":
-      return seriesFor(["hr-payroll"], "Payroll records processed", "payslips");
-    case "tax":
-      return seriesFor(bp.txn.map((l) => l.id), "Tax cases handled", "cases");
-    case "automation":
-      return seriesFor(["auto-txn"], "Transactions executed by bots", "transactions");
+      return seriesFor(["fna-ap"], "Supplier invoices processed", "invoices");
+    case "hrops":
+      return seriesFor(["hrops-payroll"], "Payroll records processed", "payslips");
+    case "procurement":
+      return seriesFor(["proc-pr"], "Requisitions converted to purchase orders", "requisitions");
+    case "idt":
+      return seriesFor(["idt-einvoice"], "E-invoices & e-way bills generated", "documents");
     default:
-      return seriesFor(["an-reports"], "Reports & data feeds delivered", "deliveries");
+      return seriesFor(["dt-cert"], "TDS certificates issued", "certificates");
   }
 }
 
 const PENDING_SHARE: Record<ServiceId, number> = {
   fna: 0.047,
-  hr: 0.031,
-  tax: 0.052,
-  automation: 0.018,
-  analytics: 0.025,
+  hrops: 0.031,
+  procurement: 0.042,
+  idt: 0.026,
+  dt: 0.048,
 };
 
 function buildOverviewMetrics(
@@ -1107,8 +1175,6 @@ function buildOverviewMetrics(
   sla: ServiceSla,
   billing: ServiceBilling,
   activity: ServiceSnapshot["activityChart"],
-  automation: AutomationSnapshot | null,
-  analytics: AnalyticsSnapshot | null,
 ): { headline: ActivityMetric[]; overview: ActivityMetric[] } {
   const cur = vols.currentIndex;
   const actualSeries = activity.series.filter((s) => s.isActual).map((s) => s.value);
@@ -1118,118 +1184,149 @@ function buildOverviewMetrics(
 
   const v = (id: string) => vols.txn[id]?.[cur] ?? 0;
   const ytdOf = (id: string) => sum((vols.txn[id] ?? []).filter((_, m) => period.months[m].isActual));
+  const slaMetric = (): ActivityMetric => ({
+    id: "sla",
+    label: "SLA achievement",
+    value: sla.overall,
+    format: "percent",
+    direction: "higher-better",
+  });
+  const billingMetric = (): ActivityMetric => ({
+    id: "billing",
+    label: "Billing",
+    value: billing.currentTotal,
+    format: "currency",
+    caption: monthCaption,
+  });
 
   switch (serviceId) {
+    /* ---- F&A: AP · AR · Travel · Record to Report · Treasury ------- */
     case "fna": {
       const invoices = v("fna-ap");
-      const invoiceValue = invoices * 17_969;
       return {
         headline: [
-          { id: "invoices", label: "Invoices processed", value: invoices, format: "number", caption: monthCaption, series: actualSeries },
-          { id: "sla", label: "SLA achievement", value: sla.overall, format: "percent" },
-          { id: "billing", label: "Billing", value: billing.currentTotal, format: "currency", caption: monthCaption },
+          { id: "invoices", label: "Invoices processed (AP)", value: invoices, format: "number", caption: monthCaption, series: actualSeries },
+          slaMetric(),
+          billingMetric(),
         ],
         overview: [
-          { id: "invoices", label: "Invoices processed", value: invoices, format: "number", caption: monthCaption, series: actualSeries },
-          { id: "invoice-value", label: "Invoice value processed", value: invoiceValue, format: "currency", caption: monthCaption },
+          { id: "invoices", label: "Supplier invoices processed (AP)", value: invoices, format: "number", caption: monthCaption, series: actualSeries },
+          { id: "invoice-value", label: "Invoice value processed", value: invoices * AVG_INVOICE_VALUE, format: "currency", caption: monthCaption },
           { id: "tat", label: "Average processing time", value: ctx.avgProcessingDays, format: "days", direction: "lower-better" },
           { id: "rejection", label: "Rejection rate", value: ctx.rejectionRate, format: "percent", direction: "lower-better" },
-          { id: "sla", label: "SLA achievement", value: sla.overall, format: "percent", direction: "higher-better" },
-          { id: "ftr", label: "First-time-right", value: ctx.firstTimeRight, format: "percent", direction: "higher-better" },
-          { id: "touchless", label: "Touchless processing", value: ctx.touchlessRate, format: "percent", direction: "higher-better" },
+          slaMetric(),
+          { id: "ar", label: "Customer invoices raised (AR)", value: v("fna-ar"), format: "number", caption: monthCaption },
+          { id: "collection", label: "Collection effectiveness (AR)", value: ctx.collectionEffectiveness, format: "percent", direction: "higher-better" },
+          { id: "travel", label: "Travel & expense claims settled", value: v("fna-travel"), format: "number", caption: monthCaption },
+          { id: "r2r", label: "Journals & reconciliations (R2R)", value: v("fna-r2r"), format: "number", caption: monthCaption },
+          { id: "close", label: "Month-end close cycle", value: ctx.closeCycleDays, format: "days", direction: "lower-better" },
+          { id: "treasury", label: "Payments & bank reconciliations", value: v("fna-treasury"), format: "number", caption: monthCaption },
           { id: "ytd", label: "Invoices processed (YTD)", value: ytdVolume, format: "number", caption: ytdCaption },
-          { id: "ar", label: "Customer invoices raised", value: v("fna-ar"), format: "number", caption: monthCaption },
-          { id: "dpo", label: "Days payable outstanding", value: ctx.daysPayableOutstanding, format: "days", direction: "lower-better" },
         ],
       };
     }
-    case "hr": {
-      const openPositions = stockValue("hr", "openPositions", entity, period);
-      const inProgress = stockValue("hr", "positionsInProgress", entity, period);
-      const closedYtd = ytdOf("hr-hiring");
+
+    /* ---- HR Ops: TA · Payroll · L&D · Core HR ---------------------- */
+    case "hrops": {
+      const openPositions = stockValue("hrops", "openPositions", entity, period);
+      const inProgress = stockValue("hrops", "positionsInProgress", entity, period);
+      const closedYtd = ytdOf("hrops-ta");
       return {
         headline: [
-          { id: "open-positions", label: "Open positions", value: openPositions, format: "number" },
-          { id: "sla", label: "SLA achievement", value: sla.overall, format: "percent" },
-          { id: "billing", label: "Billing", value: billing.currentTotal, format: "currency", caption: monthCaption },
+          { id: "payroll", label: "Payroll records processed", value: v("hrops-payroll"), format: "number", caption: monthCaption, series: actualSeries },
+          slaMetric(),
+          billingMetric(),
         ],
         overview: [
-          { id: "open-positions", label: "Open positions", value: openPositions, format: "number" },
-          { id: "in-progress", label: "Positions in progress", value: inProgress, format: "number" },
-          { id: "closed", label: "Positions closed (YTD)", value: closedYtd, format: "number", caption: ytdCaption },
-          { id: "candidate", label: "Candidate feedback", value: ctx.candidateExperience, format: "score", direction: "higher-better" },
-          { id: "sla", label: "SLA achievement", value: sla.overall, format: "percent", direction: "higher-better" },
-          { id: "tth", label: "Time to hire", value: ctx.timeToHireDays, format: "days", direction: "lower-better" },
-          { id: "payroll", label: "Payroll records processed", value: v("hr-payroll"), format: "number", caption: monthCaption, series: (vols.txn["hr-payroll"] ?? []).filter((_, m) => period.months[m].isActual) },
+          { id: "payroll", label: "Payroll records processed", value: v("hrops-payroll"), format: "number", caption: monthCaption, series: actualSeries },
           { id: "payroll-acc", label: "Payroll accuracy", value: ctx.payrollAccuracy, format: "percent", direction: "higher-better" },
-          { id: "helpdesk", label: "Helpdesk tickets resolved", value: v("hr-helpdesk"), format: "number", caption: monthCaption },
-          { id: "offers", label: "Offers pending acceptance", value: stockValue("hr", "offersPending", entity, period), format: "number" },
+          { id: "open-positions", label: "Open positions (TA)", value: openPositions, format: "number" },
+          { id: "in-progress", label: "Positions in progress", value: inProgress, format: "number" },
+          { id: "closed", label: "Mandates closed (YTD)", value: closedYtd, format: "number", caption: ytdCaption },
+          { id: "tth", label: "Time to hire", value: ctx.timeToHireDays, format: "days", direction: "lower-better" },
+          slaMetric(),
+          { id: "lnd", label: "Learning enrolments", value: v("hrops-lnd"), format: "number", caption: monthCaption },
+          { id: "lnd-completion", label: "Learning completion rate", value: ctx.trainingCompletionRate, format: "percent", direction: "higher-better" },
+          { id: "core", label: "Lifecycle & helpdesk cases", value: v("hrops-core"), format: "number", caption: monthCaption },
+          { id: "candidate", label: "Candidate feedback", value: ctx.candidateExperience, format: "score", direction: "higher-better" },
+          { id: "offers", label: "Offers pending acceptance", value: stockValue("hrops", "offersPending", entity, period), format: "number" },
         ],
       };
     }
-    case "tax": {
-      const casesMonth = sum(BLUEPRINTS.tax.txn.map((l) => v(l.id)));
+
+    /* ---- Procurement & Contracts ----------------------------------- */
+    case "procurement": {
+      const requisitions = v("proc-pr");
       return {
         headline: [
-          { id: "cases", label: "Cases handled (YTD)", value: ytdVolume, format: "number", caption: ytdCaption, series: actualSeries },
-          { id: "sla", label: "SLA achievement", value: sla.overall, format: "percent" },
-          { id: "billing", label: "Billing", value: billing.currentTotal, format: "currency", caption: monthCaption },
+          { id: "pos", label: "Purchase orders raised", value: requisitions, format: "number", caption: monthCaption, series: actualSeries },
+          slaMetric(),
+          billingMetric(),
         ],
         overview: [
-          { id: "cases-ytd", label: "Cases handled (YTD)", value: ytdVolume, format: "number", caption: ytdCaption, series: actualSeries },
-          { id: "cases-month", label: "Cases handled", value: casesMonth, format: "number", caption: monthCaption },
-          { id: "filings", label: "Statutory filings", value: v("tax-filing"), format: "number", caption: monthCaption },
-          { id: "ontime", label: "Filings on time", value: ctx.filingOnTimeRate, format: "percent", direction: "higher-better" },
-          { id: "notices", label: "Notices & assessments", value: v("tax-notice"), format: "number", caption: monthCaption },
-          { id: "sla", label: "SLA achievement", value: sla.overall, format: "percent", direction: "higher-better" },
-          { id: "tat", label: "Average turnaround", value: ctx.avgTurnaroundDays, format: "days", direction: "lower-better" },
-          { id: "itc", label: "Input credit match rate", value: ctx.inputCreditMatchRate, format: "percent", direction: "higher-better" },
-          { id: "exception", label: "Exception rate", value: ctx.exceptionRate, format: "percent", direction: "lower-better" },
-          { id: "litigation", label: "Open litigation matters", value: stockValue("tax", "openLitigation", entity, period), format: "number" },
+          { id: "pos", label: "Requisitions converted to POs", value: requisitions, format: "number", caption: monthCaption, series: actualSeries },
+          { id: "po-value", label: "Purchase order value released", value: requisitions * AVG_PO_VALUE, format: "currency", caption: monthCaption },
+          { id: "cycle", label: "Requisition to purchase order", value: ctx.prToPoDays, format: "days", direction: "lower-better" },
+          { id: "rfx", label: "Sourcing events run", value: v("proc-rfx"), format: "number", caption: monthCaption },
+          { id: "savings", label: "Realised savings rate", value: ctx.savingsRate, format: "percent", direction: "higher-better" },
+          slaMetric(),
+          { id: "contracts", label: "Contracts drafted & renewed", value: v("proc-contract"), format: "number", caption: monthCaption },
+          { id: "expiring", label: "Contracts expiring in 90 days", value: stockValue("procurement", "contractsExpiring90", entity, period), format: "number", direction: "lower-better" },
+          { id: "vendors", label: "Vendor records maintained", value: v("proc-vendor"), format: "number", caption: monthCaption },
+          { id: "vendor-tat", label: "Vendor onboarding turnaround", value: ctx.vendorOnboardingDays, format: "days", direction: "lower-better" },
+          { id: "sum", label: "Spend under management", value: ctx.spendUnderManagementPct, format: "percent", direction: "higher-better" },
+          { id: "maverick", label: "Maverick spend", value: ctx.maverickSpendRate, format: "percent", direction: "lower-better" },
         ],
       };
     }
-    case "automation": {
-      const a = automation;
+
+    /* ---- Indirect Tax ---------------------------------------------- */
+    case "idt": {
       return {
         headline: [
-          { id: "bots", label: "Bots & AI agents", value: a?.totalBots ?? 0, format: "number" },
-          { id: "success", label: "Success rate", value: a?.successRate ?? 0, format: "percent" },
-          { id: "savings", label: "Savings", value: a?.costSavingMonth ?? 0, format: "currency", caption: monthCaption },
+          { id: "einvoice", label: "E-invoices generated", value: v("idt-einvoice"), format: "number", caption: monthCaption, series: actualSeries },
+          slaMetric(),
+          billingMetric(),
         ],
         overview: [
-          { id: "bots", label: "Bots & AI agents", value: a?.totalBots ?? 0, format: "number" },
-          { id: "active", label: "Currently running", value: a?.activeBots ?? 0, format: "number" },
-          { id: "jobs", label: "Jobs executed", value: a?.totalJobs ?? 0, format: "number", caption: monthCaption },
-          { id: "success", label: "Job success rate", value: a?.successRate ?? 0, format: "percent", direction: "higher-better" },
-          { id: "txns", label: "Transactions automated", value: a?.transactionsAutomated ?? 0, format: "number", caption: monthCaption, series: actualSeries },
-          { id: "hours", label: "Effort released", value: a?.hoursSavedMonth ?? 0, format: "hours", caption: monthCaption },
-          { id: "savings", label: "Cost saving", value: a?.costSavingMonth ?? 0, format: "currency", caption: monthCaption },
-          { id: "roi", label: "Return on investment", value: a?.roi ?? 0, format: "ratio", direction: "higher-better" },
-          { id: "exceptions", label: "Exceptions queued", value: a?.exceptions ?? 0, format: "number", direction: "lower-better" },
-          { id: "coverage", label: "Automation coverage", value: (a?.automationCoverage ?? 0) * 100, format: "percent", direction: "higher-better" },
+          { id: "returns", label: "GST returns filed", value: v("idt-return"), format: "number", caption: monthCaption },
+          { id: "ontime", label: "Returns filed on time", value: ctx.filingOnTimeRate, format: "percent", direction: "higher-better" },
+          { id: "einvoice", label: "E-invoices & e-way bills", value: v("idt-einvoice"), format: "number", caption: monthCaption, series: actualSeries },
+          { id: "einvoice-rate", label: "E-invoice generation success", value: ctx.eInvoiceSuccessRate, format: "percent", direction: "higher-better" },
+          slaMetric(),
+          { id: "itc", label: "Input credit lines reconciled", value: v("idt-itc"), format: "number", caption: monthCaption },
+          { id: "itc-rate", label: "Input credit match rate", value: ctx.inputCreditMatchRate, format: "percent", direction: "higher-better" },
+          { id: "unmatched", label: "Unmatched input credit", value: stockValue("idt", "unmatchedItcValue", entity, period), format: "currency", direction: "lower-better" },
+          { id: "notices", label: "Notices & assessments handled", value: v("idt-notice"), format: "number", caption: monthCaption },
+          { id: "notice-tat", label: "Notice response time", value: ctx.noticeResponseDays, format: "days", direction: "lower-better" },
+          { id: "advisory", label: "Advisory queries closed", value: v("idt-advisory"), format: "number", caption: monthCaption },
+          { id: "litigation", label: "Open GST litigation matters", value: stockValue("idt", "openIdtLitigation", entity, period), format: "number", direction: "lower-better" },
         ],
       };
     }
+
+    /* ---- Direct Tax ------------------------------------------------- */
     default: {
-      const an = analytics;
       return {
         headline: [
-          { id: "products", label: "Active analytics", value: an?.liveProducts ?? 0, format: "number" },
-          { id: "reports", label: "Reports", value: an?.totalReports ?? 0, format: "number" },
-          { id: "insights", label: "Insights generated", value: an?.totalInsights ?? 0, format: "number" },
+          { id: "certs", label: "TDS certificates issued", value: v("dt-cert"), format: "number", caption: monthCaption, series: actualSeries },
+          slaMetric(),
+          billingMetric(),
         ],
         overview: [
-          { id: "products", label: "Active analytics products", value: an?.liveProducts ?? 0, format: "number" },
-          { id: "reports", label: "Scheduled reports & feeds", value: an?.totalReports ?? 0, format: "number" },
-          { id: "insights", label: "Insights generated (YTD)", value: an?.totalInsights ?? 0, format: "number", caption: ytdCaption },
-          { id: "users", label: "Active business users", value: an?.activeUsers ?? 0, format: "number" },
-          { id: "ontime", label: "Delivery on schedule", value: ctx.onTimeDelivery, format: "percent", direction: "higher-better" },
-          { id: "fresh", label: "Data freshness", value: ctx.dataFreshness, format: "percent", direction: "higher-better" },
-          { id: "tat", label: "Insight request turnaround", value: ctx.insightTatDays, format: "days", direction: "lower-better" },
-          { id: "adoption", label: "Analytics adoption", value: ctx.adoptionRate, format: "percent", direction: "higher-better" },
-          { id: "value", label: "Value identified (YTD)", value: an?.valueIdentified ?? 0, format: "currency", caption: ytdCaption },
-          { id: "sla", label: "SLA achievement", value: sla.overall, format: "percent", direction: "higher-better" },
+          { id: "certs", label: "TDS certificates issued", value: v("dt-cert"), format: "number", caption: monthCaption, series: actualSeries },
+          { id: "cert-ontime", label: "Certificates issued on time", value: ctx.certOnTimeRate, format: "percent", direction: "higher-better" },
+          { id: "returns", label: "Returns & statements filed", value: v("dt-return"), format: "number", caption: monthCaption },
+          { id: "tds-ontime", label: "Deposits & statements on time", value: ctx.tdsOnTimeRate, format: "percent", direction: "higher-better" },
+          slaMetric(),
+          { id: "assessments", label: "Assessments & notices handled", value: v("dt-assessment"), format: "number", caption: monthCaption },
+          { id: "assessment-tat", label: "Assessment response time", value: ctx.assessmentResponseDays, format: "days", direction: "lower-better" },
+          { id: "open-assessments", label: "Open assessments", value: stockValue("dt", "openAssessments", entity, period), format: "number", direction: "lower-better" },
+          { id: "tp", label: "Transfer pricing sets", value: v("dt-tp"), format: "number", caption: monthCaption },
+          { id: "advisory", label: "Advisory queries closed", value: v("dt-advisory"), format: "number", caption: monthCaption },
+          { id: "tat", label: "Advisory query turnaround", value: ctx.avgTurnaroundDays, format: "days", direction: "lower-better" },
+          { id: "disputed", label: "Disputed tax under appeal", value: stockValue("dt", "disputedTaxValue", entity, period), format: "currency", direction: "lower-better" },
+          { id: "certs-ytd", label: "Certificates issued (YTD)", value: ytdVolume, format: "number", caption: ytdCaption },
         ],
       };
     }
@@ -1470,8 +1567,8 @@ function buildAttention(
         severity: automation.bots.some((b) => b.status === "failed") ? "critical" : "warning",
         kind: "automation-failure",
         title: `${trouble.length} automation${trouble.length > 1 ? "s are" : " is"} reporting errors`,
-        detail: `${trouble.map((b) => b.name).join(", ")} ${trouble.length > 1 ? "are" : "is"} running below the 97% job success threshold. Affected work has reverted to manual processing.`,
-        serviceId: "automation",
+        detail: `${trouble.map((b) => `${b.name} (${SERVICE_MAP[b.serviceId].code})`).join(", ")} ${trouble.length > 1 ? "are" : "is"} running below the 97% job success threshold. Affected work has reverted to manual processing.`,
+        serviceId: trouble[0].serviceId,
         entityId: entity.id,
         metricLabel: "Bots requiring attention",
         actual: String(trouble.length),
@@ -1488,7 +1585,6 @@ function buildAttention(
         kind: "opportunity",
         title: `${automation.pipeline.length} automations in the pipeline could release a further ${hours.toLocaleString("en-IN")} hours a month`,
         detail: `Estimated additional saving of ${Math.round((hours * automation.blendedHourlyCost) / 1_00_000)} lakh per month once all four are live. Two are scheduled for December.`,
-        serviceId: "automation",
         entityId: entity.id,
         href: "/automation",
         action: "Review pipeline",
@@ -1557,27 +1653,18 @@ export function buildEntitySnapshot(
     mix[s] = billings[s].mix;
   }
 
-  /* 2 — automation is computed early: its success rate feeds the SLA. */
+  /* 2 — the cross-cutting capabilities, which read the towers' volumes. */
   const fin = financialContext(entity, period);
-  let automation: AutomationSnapshot | null = null;
-  let automationCtx: MetricContext = {};
-  if (services.includes("automation")) {
-    const built = buildAutomation(entity, period, services, volumes.automation, billings.automation);
-    automation = built.snapshot;
-    automationCtx = built.ctx;
-  }
+  const automation: AutomationSnapshot | null =
+    services.length > 0 ? buildAutomation(entity, period, services, volumes, billings) : null;
+  const analytics: AnalyticsSnapshot | null =
+    services.length > 0 ? buildAnalytics(entity, period, fin) : null;
 
-  /* 3 — SLA, with the fleet's measured success rate wired into its component. */
+  /* 3 — SLA per tower, decomposed into its named sub-services. */
   const slas: Record<string, ServiceSla> = {};
   for (const s of services) {
-    const overrides: Record<string, number> = {};
-    if (s === "automation" && automation) overrides["auto-sla-success"] = automation.successRate;
-    slas[s] = buildSla(entity, s, period, overrides);
+    slas[s] = buildSla(entity, s, period, {});
   }
-
-  const analytics = services.includes("analytics")
-    ? buildAnalytics(entity, period, volumes.analytics, fin)
-    : null;
 
   /* 4 — issues and feedback, allocated by service billing mix. */
   const issues = buildIssues(entity, period, services, mix);
@@ -1587,14 +1674,7 @@ export function buildEntitySnapshot(
   const serviceSnapshots: ServiceSnapshot[] = services.map((s) => {
     const vols = volumes[s];
     const sla = slas[s];
-    const ctx = buildMetricContext(
-      entity,
-      s,
-      period,
-      vols,
-      sla,
-      s === "automation" ? automationCtx : {},
-    );
+    const ctx = buildMetricContext(entity, s, period, vols, sla);
     const billing = billings[s];
     const activity = primaryActivity(s, vols, period);
     const { headline, overview } = buildOverviewMetrics(
@@ -1606,8 +1686,6 @@ export function buildEntitySnapshot(
       sla,
       billing,
       activity,
-      automation,
-      analytics,
     );
 
     const serviceIssues = issues.filter((i) => i.serviceId === s);

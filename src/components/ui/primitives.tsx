@@ -404,7 +404,8 @@ export function ServiceGlyph({
   code: string;
   size?: number;
 }) {
-  const short = code === "Automation" ? "AU" : code === "Analytics" ? "AN" : code;
+  // Codes are short by design; only the two-word one needs abbreviating.
+  const short = code === "HR Ops" ? "HR" : code;
   return (
     <span
       className="inline-flex shrink-0 items-center justify-center rounded-lg font-semibold"

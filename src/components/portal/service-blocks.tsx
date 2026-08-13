@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { Feedback, Issue, Kpi, ServiceBilling, ServiceSla } from "@/lib/domain/types";
+import { SUB_SERVICE_BY_SLA_COMPONENT } from "@/lib/mock/organisation";
 import {
   cx,
   formatDate,
@@ -216,14 +217,14 @@ export function SlaBreakdown({ sla, color }: { sla: ServiceSla; color: string })
       <CardHeader
         eyebrow="Service level"
         title={`Where the ${sla.overall.toFixed(1)}% comes from`}
-        subtitle="The headline service level is a weighted roll-up. This is the weighting and each component's contribution, so it is clear which part of the tower is carrying — or dragging — the number."
+        subtitle="The headline service level is a weighted roll-up across the tower's sub-services. This is the weighting and each one's contribution, so it is clear which part of the tower is carrying — or dragging — the number."
         action={<StatusPill status={sla.status}>{`Target ${sla.target}%`}</StatusPill>}
       />
 
       <Table>
         <thead>
           <tr>
-            <Th>Service level component</Th>
+            <Th>Sub-service</Th>
             <Th align="right">Weight</Th>
             <Th align="right">Actual</Th>
             <Th align="right">Target</Th>
@@ -235,6 +236,11 @@ export function SlaBreakdown({ sla, color }: { sla: ServiceSla; color: string })
           {sla.components.map((c) => (
             <tr key={c.id}>
               <Td>
+                {SUB_SERVICE_BY_SLA_COMPONENT[c.id] && (
+                  <span className="mb-0.5 block text-[11.5px] font-medium text-ink-4">
+                    {SUB_SERVICE_BY_SLA_COMPONENT[c.id].name}
+                  </span>
+                )}
                 <span className="font-medium">{c.label}</span>
                 <div className="mt-1.5 max-w-[220px]">
                   <ProgressBar

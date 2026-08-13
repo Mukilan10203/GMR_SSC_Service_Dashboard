@@ -8,7 +8,12 @@
  * goes through `src/lib/api.ts`.
  */
 
-export type ServiceId = "fna" | "hr" | "tax" | "automation" | "analytics";
+/**
+ * The five service towers the SSC contracts for. Automation and Analytics are
+ * deliberately *not* here: they are cross-cutting capabilities delivered
+ * inside these towers, not separately contracted services.
+ */
+export type ServiceId = "fna" | "hrops" | "procurement" | "idt" | "dt";
 
 export type Status = "good" | "warn" | "bad";
 export type Trend = "up" | "down" | "flat";
@@ -92,12 +97,28 @@ export interface Period {
 /* Service catalogue                                                   */
 /* ------------------------------------------------------------------ */
 
+/**
+ * A named sub-service inside a tower — the level at which the SSC actually
+ * organises delivery, and the level the SLA decomposes to. `slaComponentId`
+ * points at the SLA component that measures it, so the UI can show a
+ * sub-service and its service level as one thing.
+ */
+export interface SubServiceDefinition {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  slaComponentId: string;
+}
+
 export interface ServiceDefinition {
   id: ServiceId;
   code: string;
   name: string;
   tagline: string;
   description: string;
+  /** The named sub-services delivered inside this tower. */
+  subServices: SubServiceDefinition[];
   /** CSS var name suffix, e.g. "fna" -> var(--color-svc-fna) */
   colorKey: string;
   /** Conceptual upstream systems — displayed, never called. */
@@ -244,6 +265,8 @@ export interface ServiceSla {
 export interface Kpi {
   id: string;
   serviceId: ServiceId;
+  /** The sub-service this indicator measures, where it belongs to one. */
+  subServiceId?: string;
   name: string;
   description: string;
   actual: number;
@@ -343,6 +366,8 @@ export interface Bot {
   kind: "RPA Bot" | "AI Agent";
   process: string;
   serviceId: ServiceId;
+  /** The sub-service inside that tower the bot works on. */
+  subServiceId: string;
   status: BotStatus;
   jobs: number;
   failedJobs: number;

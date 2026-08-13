@@ -33,7 +33,7 @@ export const ENTITIES: Entity[] = [
     locationId: "delhi",
     sector: "Airport Operations",
     scale: 1.0,
-    services: ["fna", "hr", "tax", "automation", "analytics"],
+    services: ["fna", "hrops", "procurement", "idt", "dt"],
     opsDelta: 0,
     contractStart: "2021-04-01",
     relationshipManager: "Meera Subramanian",
@@ -46,7 +46,7 @@ export const ENTITIES: Entity[] = [
     locationId: "delhi",
     sector: "Real Estate & Hospitality",
     scale: 0.34,
-    services: ["fna", "hr", "tax"],
+    services: ["fna", "hrops", "idt"],
     opsDelta: -0.6,
     contractStart: "2022-07-01",
     relationshipManager: "Meera Subramanian",
@@ -59,7 +59,7 @@ export const ENTITIES: Entity[] = [
     locationId: "delhi",
     sector: "Retail",
     scale: 0.21,
-    services: ["fna", "tax", "analytics"],
+    services: ["fna", "procurement", "idt"],
     opsDelta: 0.4,
     contractStart: "2023-04-01",
     relationshipManager: "Arjun Bhatia",
@@ -72,7 +72,7 @@ export const ENTITIES: Entity[] = [
     locationId: "hyderabad",
     sector: "Airport Operations",
     scale: 0.76,
-    services: ["fna", "hr", "tax", "automation"],
+    services: ["fna", "hrops", "procurement", "idt", "dt"],
     opsDelta: -1.1,
     contractStart: "2021-10-01",
     relationshipManager: "Kavitha Reddy",
@@ -85,7 +85,7 @@ export const ENTITIES: Entity[] = [
     locationId: "hyderabad",
     sector: "Infrastructure Development",
     scale: 0.19,
-    services: ["fna", "hr"],
+    services: ["fna", "hrops"],
     opsDelta: -0.3,
     contractStart: "2023-01-01",
     relationshipManager: "Kavitha Reddy",
@@ -98,7 +98,7 @@ export const ENTITIES: Entity[] = [
     locationId: "chennai",
     sector: "Energy & Urban Infrastructure",
     scale: 0.29,
-    services: ["fna", "hr", "analytics"],
+    services: ["fna", "hrops", "procurement"],
     opsDelta: 0.2,
     contractStart: "2022-04-01",
     relationshipManager: "Deepak Varma",
@@ -111,7 +111,7 @@ export const ENTITIES: Entity[] = [
     locationId: "chennai",
     sector: "Cargo & Logistics",
     scale: 0.16,
-    services: ["fna", "tax"],
+    services: ["fna", "idt"],
     opsDelta: -0.4,
     contractStart: "2023-07-01",
     relationshipManager: "Deepak Varma",
@@ -124,7 +124,7 @@ export const ENTITIES: Entity[] = [
     locationId: "mumbai",
     sector: "Ground Handling",
     scale: 0.27,
-    services: ["fna", "hr", "automation"],
+    services: ["fna", "hrops", "procurement"],
     opsDelta: 0.5,
     contractStart: "2022-10-01",
     relationshipManager: "Arjun Bhatia",
@@ -137,7 +137,7 @@ export const ENTITIES: Entity[] = [
     locationId: "goa",
     sector: "Airport Operations",
     scale: 0.38,
-    services: ["fna", "hr", "tax", "automation"],
+    services: ["fna", "hrops", "idt", "dt"],
     opsDelta: -0.2,
     contractStart: "2023-01-01",
     relationshipManager: "Kavitha Reddy",
@@ -148,63 +148,260 @@ export const ENTITIES: Entity[] = [
 /* Service catalogue                                                   */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The SSC's five service towers, and the sub-services delivered inside each.
+ *
+ * The sub-service list is not decoration: every entry names an SLA component
+ * in `SLA_COMPONENTS`, so the service level a customer sees on a tower is a
+ * weighted roll-up of exactly these sub-services.
+ *
+ * SAP SuccessFactors deliberately appears as a *system*, not a sub-service —
+ * HR Ops runs on it, it is not something the SSC sells.
+ */
 export const SERVICES: ServiceDefinition[] = [
   {
     id: "fna",
     code: "F&A",
     name: "Finance & Accounting",
-    tagline: "Accounts payable, receivable, general ledger and reporting",
+    tagline: "Payables, receivables, travel, record to report and treasury",
     description:
-      "End-to-end transaction processing across purchase-to-pay, order-to-cash and record-to-report, including month-end close support and management reporting.",
+      "End-to-end finance transaction processing across purchase-to-pay, order-to-cash, employee travel and expense, record-to-report close and reporting, and day-to-day treasury operations.",
+    subServices: [
+      {
+        id: "fna-ap",
+        code: "AP",
+        name: "Accounts Payable",
+        description:
+          "Supplier invoice capture, three-way match, exception clearing and payment-ready posting.",
+        slaComponentId: "fna-sla-ap",
+      },
+      {
+        id: "fna-ar",
+        code: "AR",
+        name: "Accounts Receivable",
+        description:
+          "Customer invoicing, receipt application, dunning and collections support against the debtors ledger.",
+        slaComponentId: "fna-sla-ar",
+      },
+      {
+        id: "fna-travel",
+        code: "Travel",
+        name: "Travel & Expense",
+        description:
+          "Travel request and claim processing, policy audit, and employee reimbursement settlement.",
+        slaComponentId: "fna-sla-travel",
+      },
+      {
+        id: "fna-r2r",
+        code: "R2R",
+        name: "Record to Report",
+        description:
+          "Journals, reconciliations, intercompany matching, month-end close and the management reporting pack.",
+        slaComponentId: "fna-sla-r2r",
+      },
+      {
+        id: "fna-treasury",
+        code: "Treasury",
+        name: "Treasury",
+        description:
+          "Payment runs, bank host-to-host processing, bank reconciliation and daily cash position reporting.",
+        slaComponentId: "fna-sla-treasury",
+      },
+    ],
     colorKey: "fna",
     sourceSystems: ["SAP S/4HANA", "SAP Concur", "Bank host-to-host"],
     slaTarget: 95,
   },
   {
-    id: "hr",
-    code: "HR",
-    name: "Human Resources",
-    tagline: "Payroll, talent acquisition and employee lifecycle",
+    id: "hrops",
+    code: "HR Ops",
+    name: "HR Operations",
+    tagline: "Talent acquisition, payroll and learning, run on SAP SuccessFactors",
     description:
-      "Payroll processing, recruitment support, onboarding and exit administration, and an employee helpdesk covering the full employee lifecycle.",
-    colorKey: "hr",
-    sourceSystems: ["SuccessFactors", "Darwinbox", "Payroll engine"],
+      "Recruitment support from requisition to offer, end-to-end payroll processing, learning and development administration, and the employee lifecycle and helpdesk operations that sit on SAP SuccessFactors.",
+    subServices: [
+      {
+        id: "hrops-ta",
+        code: "TA",
+        name: "Talent Acquisition",
+        description:
+          "Requisition intake, sourcing, screening, interview coordination and offer administration.",
+        slaComponentId: "hrops-sla-ta",
+      },
+      {
+        id: "hrops-payroll",
+        code: "Payroll",
+        name: "Payroll",
+        description:
+          "Input consolidation, payroll run, statutory deductions, off-cycle corrections and full-and-final settlements.",
+        slaComponentId: "hrops-sla-payroll",
+      },
+      {
+        id: "hrops-lnd",
+        code: "L&D",
+        name: "Learning & Development",
+        description:
+          "Training calendar administration, enrolment and attendance, compliance curricula and completion tracking.",
+        slaComponentId: "hrops-sla-lnd",
+      },
+      {
+        id: "hrops-core",
+        code: "Core HR",
+        name: "Employee Lifecycle & Helpdesk",
+        description:
+          "Onboarding and exit formalities, employee data administration and the tier-1 employee helpdesk on SAP SuccessFactors.",
+        slaComponentId: "hrops-sla-core",
+      },
+    ],
+    colorKey: "hrops",
+    sourceSystems: ["SAP SuccessFactors", "Payroll engine", "HR service desk"],
     slaTarget: 90,
   },
   {
-    id: "tax",
-    code: "Tax",
-    name: "Taxation & Compliance",
-    tagline: "Direct and indirect tax, filings and assessments",
+    id: "procurement",
+    code: "P&C",
+    name: "Procurement & Contracts",
+    tagline: "Sourcing, purchase orders, contracts and vendor management",
     description:
-      "GST and TDS compliance, statutory return preparation and filing, notice and assessment handling, and advisory support on transaction taxability.",
-    colorKey: "tax",
-    sourceSystems: ["SAP S/4HANA", "GSTN portal", "TRACES"],
-    slaTarget: 97,
-  },
-  {
-    id: "automation",
-    code: "Automation",
-    name: "Automation & AI",
-    tagline: "Digital workforce running your transactions",
-    description:
-      "A managed fleet of RPA bots and AI agents executing high-volume, rules-based work, monitored through a control tower with exception routing back to human teams.",
-    colorKey: "automation",
-    sourceSystems: ["RPA Control Tower", "AI Agent Platform"],
-    slaTarget: 97,
-  },
-  {
-    id: "analytics",
-    code: "Analytics",
-    name: "Analytics & Insight",
-    tagline: "Decision analytics built on your transaction data",
-    description:
-      "Curated analytics products over finance, procurement and revenue data — spend, revenue, ageing, variance and open-item analysis — delivered as governed dashboards.",
-    colorKey: "analytics",
-    sourceSystems: ["SAP S/4HANA", "SAP Ariba", "Local IT systems"],
+      "Operational procurement from requisition to purchase order, sourcing event support, contract drafting, renewal and repository management, and vendor onboarding and master data.",
+    subServices: [
+      {
+        id: "proc-po",
+        code: "P2P",
+        name: "Requisition & Purchase Orders",
+        description:
+          "Requisition validation, purchase order creation, amendment and expediting against agreed catalogues.",
+        slaComponentId: "proc-sla-po",
+      },
+      {
+        id: "proc-sourcing",
+        code: "Sourcing",
+        name: "Sourcing & Category Support",
+        description:
+          "RFx preparation, bid administration, comparative analysis and negotiation support for category teams.",
+        slaComponentId: "proc-sla-sourcing",
+      },
+      {
+        id: "proc-contract",
+        code: "CLM",
+        name: "Contract Lifecycle",
+        description:
+          "Contract drafting from templates, renewal tracking, obligation management and the central contract repository.",
+        slaComponentId: "proc-sla-contract",
+      },
+      {
+        id: "proc-vendor",
+        code: "Vendor",
+        name: "Vendor Management",
+        description:
+          "Vendor onboarding, due diligence, bank detail verification and vendor master data maintenance.",
+        slaComponentId: "proc-sla-vendor",
+      },
+    ],
+    colorKey: "procurement",
+    sourceSystems: ["SAP Ariba", "SAP S/4HANA", "SAP MDG"],
     slaTarget: 95,
   },
+  {
+    id: "idt",
+    code: "IDT",
+    name: "Indirect Tax",
+    tagline: "GST compliance, e-invoicing, input credit and assessments",
+    description:
+      "GST return preparation and filing, e-invoice and e-way bill generation, input tax credit reconciliation against GSTR-2B, and notice, audit and assessment handling.",
+    subServices: [
+      {
+        id: "idt-return",
+        code: "GST",
+        name: "GST Returns & Compliance",
+        description:
+          "GSTR-1, GSTR-3B and annual return preparation, review and filing before the statutory due date.",
+        slaComponentId: "idt-sla-filing",
+      },
+      {
+        id: "idt-einvoice",
+        code: "E-Inv",
+        name: "E-Invoicing & E-Way Bills",
+        description:
+          "IRN generation, QR posting and e-way bill issue against the invoice register, with failure re-processing.",
+        slaComponentId: "idt-sla-einvoice",
+      },
+      {
+        id: "idt-itc",
+        code: "ITC",
+        name: "Input Tax Credit",
+        description:
+          "Purchase register to GSTR-2B reconciliation, mismatch follow-up with vendors and credit eligibility review.",
+        slaComponentId: "idt-sla-itc",
+      },
+      {
+        id: "idt-notice",
+        code: "Notices",
+        name: "Notices & Assessments",
+        description:
+          "GST notice logging, response preparation, departmental audit support and litigation documentation.",
+        slaComponentId: "idt-sla-notice",
+      },
+    ],
+    colorKey: "idt",
+    sourceSystems: ["GSTN portal", "IRP / NIC e-invoice", "SAP S/4HANA"],
+    slaTarget: 97,
+  },
+  {
+    id: "dt",
+    code: "DT",
+    name: "Direct Tax",
+    tagline: "Withholding tax, corporate returns, transfer pricing and assessments",
+    description:
+      "TDS and withholding compliance, corporate tax computation and return filing, transfer pricing documentation, and assessment and litigation support.",
+    subServices: [
+      {
+        id: "dt-tds",
+        code: "TDS",
+        name: "Withholding Tax",
+        description:
+          "TDS determination, monthly deposit, quarterly statement filing and lower-deduction certificate tracking.",
+        slaComponentId: "dt-sla-tds",
+      },
+      {
+        id: "dt-cert",
+        code: "Certs",
+        name: "TDS Certificates",
+        description:
+          "Form 16 and 16A generation from TRACES, vendor and employee distribution and query resolution.",
+        slaComponentId: "dt-sla-cert",
+      },
+      {
+        id: "dt-return",
+        code: "Returns",
+        name: "Corporate Tax Returns",
+        description:
+          "Advance tax computation, tax provision support, and corporate income tax return preparation and filing.",
+        slaComponentId: "dt-sla-return",
+      },
+      {
+        id: "dt-assessment",
+        code: "TP & Assmt",
+        name: "Transfer Pricing & Assessments",
+        description:
+          "Transfer pricing documentation and benchmarking, scrutiny assessment responses and appellate support.",
+        slaComponentId: "dt-sla-assessment",
+      },
+    ],
+    colorKey: "dt",
+    sourceSystems: ["TRACES", "Income Tax portal", "SAP S/4HANA"],
+    slaTarget: 97,
+  },
 ];
+
+/** Sub-service lookup by SLA component id — used to label the decomposition. */
+export const SUB_SERVICE_BY_SLA_COMPONENT = SERVICES.reduce(
+  (acc, s) => {
+    for (const sub of s.subServices) acc[sub.slaComponentId] = sub;
+    return acc;
+  },
+  {} as Record<string, ServiceDefinition["subServices"][number]>,
+);
 
 export const SERVICE_MAP: Record<ServiceId, ServiceDefinition> = SERVICES.reduce(
   (acc, s) => {
@@ -266,7 +463,7 @@ export const USERS: PortalUser[] = [
     initials: "VR",
     entityIds: ["ghial", "hyd-aero"],
     demoPassword: DEMO_PASSWORD,
-    demoNote: "Hyderabad cluster · HR service under stress",
+    demoNote: "Hyderabad cluster · HR Ops under stress",
   },
   {
     id: "u-hr-head-dial",
@@ -276,9 +473,21 @@ export const USERS: PortalUser[] = [
     title: "Head — Human Resources",
     initials: "SI",
     entityIds: ["dial"],
-    restrictedServices: ["fna", "tax", "analytics"],
+    restrictedServices: ["fna", "procurement", "idt", "dt"],
     demoPassword: DEMO_PASSWORD,
-    demoNote: "Service-scoped access · HR and Automation only",
+    demoNote: "Service-scoped access · HR Ops only",
+  },
+  {
+    id: "u-tax-head-dial",
+    name: "Neha Agarwal",
+    email: "tax.head@delhiairport.demo",
+    role: "Head of Taxation",
+    title: "Head — Direct & Indirect Taxation",
+    initials: "NA",
+    entityIds: ["dial"],
+    restrictedServices: ["fna", "hrops", "procurement"],
+    demoPassword: DEMO_PASSWORD,
+    demoNote: "Service-scoped access · Indirect and Direct Tax only",
   },
 ];
 

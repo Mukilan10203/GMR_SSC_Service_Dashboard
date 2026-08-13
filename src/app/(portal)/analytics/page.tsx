@@ -39,18 +39,9 @@ export default function AnalyticsPage() {
         subtitle={
           <>
             The SSC does more than process your transactions — it reads them. These are the analytics
-            products running on {snapshot.entity.name}&rsquo;s finance, procurement and revenue data.
+            products running on {snapshot.entity.name}&rsquo;s finance, procurement and tax data,
+            built on top of the five service towers at no separate charge.
           </>
-        }
-        actions={
-          analytics && (
-            <Link
-              href="/services/analytics"
-              className="rounded-lg border border-line bg-surface px-3 py-2 text-[12.5px] font-medium text-ink-2 transition-colors hover:border-line-strong hover:text-ink"
-            >
-              Analytics service detail →
-            </Link>
-          )
         }
       />
 

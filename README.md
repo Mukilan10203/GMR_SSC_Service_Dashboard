@@ -6,6 +6,10 @@ them, how much they are using, what they are being charged, how well it is
 performing, what is going wrong, what their people think, and what value the
 SSC is creating beyond transaction processing.**
 
+The SSC delivers five service towers — **F&A**, **HR Ops**, **Procurement &
+Contracts**, **Indirect Tax** and **Direct Tax** — each broken down into the
+sub-services that are actually run, measured and billed.
+
 This is a **working prototype**. Authentication is simulated and every figure is
 illustrative — no SAP, Ariba, HR or automation system is connected. The data is
 not random: it is generated from contracted rate cards so that the numbers
@@ -24,18 +28,43 @@ Sign in with any demo account (they are listed on the login page):
 
 | Account | Scope | Demonstrates |
 |---|---|---|
-| `cfo@delhiairport.demo` | Delhi International Airport, all 5 services | The main demo path |
+| `cfo@delhiairport.demo` | Delhi International Airport, all 5 towers | The main demo path |
 | `group.cfo@gmrgroup.demo` | 9 entities across 5 locations | Location/entity switching, portfolio roll-up |
-| `ceo@hyderabadairport.demo` | Hyderabad cluster (2 entities) | A service in genuine trouble (HR SLA 82%) |
-| `hr.head@delhiairport.demo` | DIAL, HR + Automation only | Service-level authorisation |
+| `ceo@hyderabadairport.demo` | Hyderabad cluster (2 entities) | A service in genuine trouble (HR Ops SLA 78%) |
+| `hr.head@delhiairport.demo` | DIAL, HR Ops only | Service-level authorisation |
+| `tax.head@delhiairport.demo` | DIAL, IDT + DT only | Service-level authorisation |
 
 Password for all accounts: `demo1234`
 
 ```bash
 npm run build        # production build
-npm run verify:data  # assert the dataset reconciles (37 checks)
+npm run verify:data  # assert the dataset reconciles (40 checks)
 npm run typecheck
 ```
+
+---
+
+## What the SSC delivers
+
+Five contracted service towers, each decomposed into the sub-services that are
+actually run and measured:
+
+| Tower | Code | Sub-services |
+|---|---|---|
+| Finance & Accounting | F&A | Accounts Payable · Accounts Receivable · Travel & Expense · Record to Report · Treasury |
+| HR Operations | HR Ops | Talent Acquisition · Payroll · Learning & Development · Employee Lifecycle & Helpdesk |
+| Procurement & Contracts | P&C | Requisition & Purchase Orders · Sourcing · Contract Lifecycle · Vendor Management |
+| Indirect Tax | IDT | GST Returns · E-Invoicing & E-Way Bills · Input Tax Credit · Notices & Assessments |
+| Direct Tax | DT | Withholding Tax · TDS Certificates · Corporate Tax Returns · Transfer Pricing & Assessments |
+
+**SAP SuccessFactors is a system, not a service.** HR Ops runs on it, so it
+appears in the source-system mapping rather than the service catalogue.
+
+**Automation and Analytics are capabilities, not towers.** Every bot belongs to
+a tower and is billed on that tower's digital workforce lines; analytics is
+built on the data the towers already process and carries no separate charge.
+Both have their own screens because both are things the customer wants to see,
+but neither is a sixth service.
 
 ---
 
@@ -44,21 +73,24 @@ npm run typecheck
 1. **Sign in** as `cfo@delhiairport.demo`
 2. **Overview** — executive summary, *Attention required*, service cards, billing,
    customer experience, the value automation and analytics are creating
-3. **F&A** → **Overview** — 10,240 invoices, ₹18.40 Cr invoice value, 4.2-day
-   processing time, 3.4% rejection rate, 96.8% SLA
-4. **F&A → Billing** — *"Why you are charged ₹45.08 L this month"*: transaction
+3. **F&A → Overview** — the five sub-services with their individual service
+   levels, then 10,240 invoices, ₹18.40 Cr invoice value, 4.2-day processing
+   time, 3.4% rejection rate, 97.2% SLA
+4. **F&A → Billing** — *"Why you are charged ₹68 L this month"*: transaction
    charging (10,240 invoices × ₹100 = ₹10.24 L) and FTE charging side by side,
    then the drivers behind the month-on-month move
-5. **F&A → KPI** — five KPIs with actual, target, status and trend, then the SLA
-   decomposed into its weighted components
+5. **F&A → KPI** — eight KPIs spanning AP, AR, Travel, R2R and Treasury, then the
+   SLA decomposed into its five weighted sub-services
 6. **F&A → Issues** — open items with ageing against target; click any row for the
    full history and the KPI it affects
-7. **HR → KPI** — a different KPI set entirely, including the worked
+7. **HR Ops → KPI** — a different KPI set entirely, including the worked
    **KPI → performance gap → issues → feedback** chain on *Talent acquisition SLA*
    (60% against a 90% target)
-8. **Automation** — the Bot & AI Control Tower
-9. **Analytics** — executive indicators and eight analytics products
-10. Switch **Entity** in the top bar — every number on every screen changes
+8. **IDT / DT** — the two tax towers side by side: GST filings, e-invoicing and
+   input credit against withholding, corporate returns and transfer pricing
+9. **Automation** — the Bot & AI Control Tower, 24 bots across all five towers
+10. **Analytics** — executive indicators and eight analytics products
+11. Switch **Entity** in the top bar — every number on every screen changes
 
 ---
 
@@ -83,15 +115,16 @@ Concretely, and all verifiable via `npm run verify:data`:
 - **The same volume drives the KPIs.** The 10,240 invoices that produce ₹10.24 L
   of billing are the same 10,240 the 3.4% rejection rate is measured against
   (348 invoices), and the same ones behind the exception queue.
-- **SLA is a real weighted roll-up.** Each service SLA is `Σ(component × weight)`
-  over its named sub-services; the entity SLA is the billing-weighted average of
-  those. That is why HR lands at 94.1% despite talent acquisition sitting at 60%
-  — the decomposition is shown on screen.
-- **The control tower reconciles to its invoice.** Bots in the tower = bots
-  billed for. Σ bot transactions = transactions billed for. ROI = hours released
-  × blended rate ÷ the automation fee. The fleet's *measured* success rate is
-  what feeds the automation SLA component.
-- **Analytics totals tie out.** Σ per-product reports = reports billed for;
+- **SLA is a real weighted roll-up over the sub-services.** Each tower's SLA is
+  `Σ(sub-service × weight)`, with exactly one component per named sub-service;
+  the entity SLA is the billing-weighted average of those. That is why HR Ops
+  lands at 91.9% despite talent acquisition sitting at 60% — the decomposition
+  is shown on screen, sub-service by sub-service.
+- **The control tower reconciles to the towers that pay for it.** Bots in the
+  tower = runtime licences billed, per tower. Σ bot transactions = bot
+  transactions billed, per tower. ROI = hours released × blended rate ÷ the
+  digital workforce fee across all five towers.
+- **Analytics totals tie out.** Σ per-product reports = total reports;
   aero + non-aero revenue = total revenue.
 - **Issues derive from performance.** Each issue is written against a specific
   KPI or SLA component, and the count scales with entity size and delivery
@@ -116,11 +149,11 @@ src/
 │   └── (portal)/                 Auth-gated shell
 │       ├── overview/             Executive dashboard
 │       ├── services/             Service catalogue
-│       │   └── [serviceId]/      Overview | Billing | KPI | Issues
+│       │   └── [serviceId]/      Sub-services | Billing | KPI | Issues
 │       ├── billing/              Billing analysis and charging model
 │       ├── performance/          SLA, all KPIs, customer experience
 │       ├── issues/               Issue register and feedback
-│       ├── automation/           Bot & AI Control Tower
+│       ├── automation/           Bot & AI Control Tower (cross-tower capability)
 │       ├── analytics/            Analytics portfolio and executive indicators
 │       └── portfolio/            Group scope: all entities compared
 │
@@ -130,11 +163,12 @@ src/
 │   ├── format.ts                     Lakh/crore formatting, status grading
 │   └── mock/
 │       ├── calendar.ts               Indian fiscal calendar
-│       ├── organisation.ts           Locations, entities, users, services
+│       ├── organisation.ts           Locations, entities, users, the 5 towers
+│       │                             and their sub-services
 │       ├── rate-cards.ts             Rate cards, demand curves, SLA weights
 │       ├── kpis.ts                   KPI definitions and targets
 │       ├── issues.ts                 Issue and feedback banks
-│       ├── automation-fleet.ts       Bot roster
+│       ├── automation-fleet.ts       Bot roster, mapped tower → sub-service
 │       ├── analytics-products.ts     Analytics products, financial baseline
 │       └── engine.ts                 Derives everything from the above
 │

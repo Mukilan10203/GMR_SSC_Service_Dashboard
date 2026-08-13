@@ -19,6 +19,7 @@ import {
   Badge,
   Card,
   CardHeader,
+  ProgressBar,
   SectionHeading,
   ServiceGlyph,
   SourceTag,
@@ -85,6 +86,15 @@ function ServiceDetail() {
   const issues = snapshot.issues.filter((i) => i.serviceId === def.id);
   const openIssues = issues.filter((i) => i.status !== "resolved");
   const feedback = snapshot.feedback.filter((f) => f.serviceId === def.id);
+  const serviceBots = (snapshot.automation?.bots ?? []).filter((b) => b.serviceId === def.id);
+
+  /** Each sub-service joined to the SLA component that measures it. */
+  const subServices = def.subServices.map((sub) => ({
+    ...sub,
+    sla: service.sla.components.find((c) => c.id === sub.slaComponentId),
+    kpis: service.kpis.filter((k) => k.subServiceId === sub.id),
+    bots: serviceBots.filter((b) => b.subServiceId === sub.id).length,
+  }));
 
   const setTab = (next: TabId) => {
     router.replace(next === "overview" ? `/services/${def.id}` : `/services/${def.id}?tab=${next}`, {
@@ -104,22 +114,6 @@ function ServiceDetail() {
             <StatusPill status={service.sla.status}>
               SLA {service.sla.overall.toFixed(1)}% · target {service.sla.target}%
             </StatusPill>
-            {def.id === "automation" && (
-              <Link
-                href="/automation"
-                className="rounded-lg border border-line bg-surface px-3 py-2 text-[12.5px] font-medium text-ink-2 transition-colors hover:border-line-strong hover:text-ink"
-              >
-                Open control tower →
-              </Link>
-            )}
-            {def.id === "analytics" && (
-              <Link
-                href="/analytics"
-                className="rounded-lg border border-line bg-surface px-3 py-2 text-[12.5px] font-medium text-ink-2 transition-colors hover:border-line-strong hover:text-ink"
-              >
-                Open analytics portfolio →
-              </Link>
-            )}
           </>
         }
       />
@@ -207,6 +201,63 @@ function ServiceDetail() {
         <div className="space-y-6">
           <section>
             <SectionHeading
+              title={`What sits inside ${def.code}`}
+              subtitle={`${subServices.length} sub-services are delivered under this tower. Each one is measured separately and weighted into the headline service level.`}
+            />
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {subServices.map((sub) => (
+                <Card key={sub.id} className="!p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[13.5px] leading-snug font-semibold text-ink">{sub.name}</p>
+                      <p className="mt-0.5 text-[11.5px] text-ink-4">{sub.code}</p>
+                    </div>
+                    {sub.sla && (
+                      <StatusPill status={sub.sla.status} size="sm">
+                        {sub.sla.actual.toFixed(1)}%
+                      </StatusPill>
+                    )}
+                  </div>
+
+                  <p className="mt-2.5 text-[12.5px] leading-relaxed text-ink-3">{sub.description}</p>
+
+                  {sub.sla && (
+                    <div className="mt-3.5">
+                      <div className="mb-1.5 flex items-baseline justify-between">
+                        <span className="text-[11.5px] text-ink-4">
+                          Weight {(sub.sla.weight * 100).toFixed(0)}% of tower SLA
+                        </span>
+                        <span className="text-[11.5px] font-medium text-ink-2 tnum">
+                          Target {sub.sla.target}%
+                        </span>
+                      </div>
+                      <ProgressBar
+                        value={sub.sla.actual}
+                        max={100}
+                        color={
+                          sub.sla.status === "bad"
+                            ? "var(--color-bad)"
+                            : sub.sla.status === "warn"
+                              ? "var(--color-warn)"
+                              : color
+                        }
+                        height={5}
+                        label={`${sub.name} service level ${sub.sla.actual.toFixed(1)}%`}
+                      />
+                    </div>
+                  )}
+
+                  <p className="mt-3.5 border-t border-line-soft pt-2.5 text-[11.5px] text-ink-4">
+                    {sub.kpis.length} indicator{sub.kpis.length === 1 ? "" : "s"}
+                    {sub.bots > 0 && ` · ${sub.bots} automation${sub.bots === 1 ? "" : "s"}`}
+                  </p>
+                </Card>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <SectionHeading
               title="Service activity"
               subtitle={`What the SSC processed for you in ${service.billing.currentMonthLabel}, and how that has moved through the year.`}
             />
@@ -284,12 +335,12 @@ function ServiceDetail() {
             </div>
           </section>
 
-          {def.id === "automation" && snapshot.automation && (
+          {serviceBots.length > 0 && snapshot.automation && (
             <Card>
               <CardHeader
                 eyebrow="Digital workforce"
-                title="Bots and AI agents working on your account"
-                subtitle="A summary view. The full control tower shows each bot, its jobs and its exceptions."
+                title={`${serviceBots.length} automation${serviceBots.length > 1 ? "s are" : " is"} running inside ${def.code}`}
+                subtitle="Bots and AI agents licensed to this tower. The full control tower shows every job and exception."
                 action={
                   <Link
                     href="/automation"
@@ -301,45 +352,23 @@ function ServiceDetail() {
               />
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[
-                  { label: "Bots & agents", value: formatNumber(snapshot.automation.totalBots) },
-                  { label: "Jobs this month", value: formatNumber(snapshot.automation.totalJobs) },
-                  { label: "Success rate", value: formatPercent(snapshot.automation.successRate) },
+                  { label: "Bots & agents", value: formatNumber(serviceBots.length) },
+                  {
+                    label: "Transactions automated",
+                    value: formatNumber(serviceBots.reduce((a, b) => a + b.transactions, 0)),
+                  },
+                  {
+                    label: "Jobs this month",
+                    value: formatNumber(serviceBots.reduce((a, b) => a + b.jobs, 0)),
+                  },
                   {
                     label: "Effort released",
-                    value: `${formatNumber(snapshot.automation.hoursSavedMonth)} hrs`,
+                    value: `${formatNumber(serviceBots.reduce((a, b) => a + b.hoursSaved, 0))} hrs`,
                   },
                 ].map((t) => (
                   <div key={t.label} className="rounded-lg border border-line bg-surface-sunken p-3.5">
                     <p className="eyebrow">{t.label}</p>
                     <p className="mt-1.5 text-[18px] font-semibold text-ink tnum">{t.value}</p>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-
-          {def.id === "analytics" && snapshot.analytics && (
-            <Card>
-              <CardHeader
-                eyebrow="Analytics portfolio"
-                title="Products live on your data"
-                action={
-                  <Link
-                    href="/analytics"
-                    className="text-[12.5px] font-medium text-accent hover:text-accent-strong"
-                  >
-                    Open the portfolio →
-                  </Link>
-                }
-              />
-              <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-                {snapshot.analytics.products.map((p) => (
-                  <div key={p.id} className="rounded-lg border border-line p-3.5">
-                    <p className="text-[13px] font-medium text-ink">{p.name}</p>
-                    <p className="mt-1 text-[11.5px] text-ink-4">{p.category}</p>
-                    <p className="mt-2.5 text-[11.5px] text-ink-3">
-                      {p.insights} insights · {p.reports} reports
-                    </p>
                   </div>
                 ))}
               </div>

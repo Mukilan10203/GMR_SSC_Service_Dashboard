@@ -34,14 +34,22 @@ import {
 /* Navigation model                                                    */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Automation and Analytics are cross-cutting capabilities delivered inside
+ * the five towers rather than towers of their own, so they sit below the
+ * service navigation and are always available.
+ */
 const NAV = [
   { href: "/overview", label: "Overview", Icon: IconOverview },
   { href: "/services", label: "Services", Icon: IconServices, expandable: true },
   { href: "/billing", label: "Billing", Icon: IconBilling },
   { href: "/performance", label: "Performance", Icon: IconPerformance },
   { href: "/issues", label: "Issues & Feedback", Icon: IconIssues },
-  { href: "/automation", label: "Automation", Icon: IconAutomation, service: "automation" },
-  { href: "/analytics", label: "Analytics", Icon: IconAnalytics, service: "analytics" },
+] as const;
+
+const CAPABILITY_NAV = [
+  { href: "/automation", label: "Automation", Icon: IconAutomation },
+  { href: "/analytics", label: "Analytics", Icon: IconAnalytics },
 ] as const;
 
 /* ------------------------------------------------------------------ */
@@ -508,7 +516,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const services = snapshot?.services ?? [];
   const showPortfolio = (user?.entityIds.length ?? 0) > 1;
 
-  const nav = NAV.filter((n) => !("service" in n) || services.some((s) => s.service.id === n.service));
+  const nav = NAV;
 
   return (
     <div className="flex h-full flex-col bg-rail">
@@ -594,6 +602,35 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               </li>
             );
           })}
+
+          <li className="pt-2">
+            <div className="mx-3 mb-2 border-t border-rail-line" />
+            <p className="mb-1 px-3 text-[10.5px] font-semibold tracking-[0.07em] text-rail-ink-dim uppercase">
+              Delivered across your services
+            </p>
+            <ul className="space-y-0.5">
+              {CAPABILITY_NAV.map(({ href, label, Icon }) => {
+                const active = pathname.startsWith(href);
+                return (
+                  <li key={href}>
+                    <Link
+                      href={href}
+                      onClick={onNavigate}
+                      className={cx(
+                        "flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] transition-colors",
+                        active
+                          ? "bg-white/[0.09] font-medium text-white"
+                          : "text-rail-ink hover:bg-white/[0.05] hover:text-white",
+                      )}
+                    >
+                      <Icon size={17} className={active ? "text-white" : "text-rail-ink-dim"} />
+                      {label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </li>
 
           {showPortfolio && (
             <li className="pt-2">

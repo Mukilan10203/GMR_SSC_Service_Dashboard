@@ -11,7 +11,7 @@ import { PortalMark } from "@/components/portal/PortalMark";
 const VALUE_PROPS = [
   {
     title: "Every service in one view",
-    body: "Finance & accounting, HR, tax, automation and analytics — what you consume, what it costs and how it is performing.",
+    body: "F&A, HR Ops, Procurement & Contracts, Indirect Tax and Direct Tax — down to the sub-service: what you consume, what it costs and how it is performing.",
   },
   {
     title: "Billing you can interrogate",
