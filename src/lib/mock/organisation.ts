@@ -500,8 +500,23 @@ export const getLocation = (id: string): Location | undefined => LOCATIONS.find(
 export const getUserByEmail = (email: string): PortalUser | undefined =>
   USERS.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
 
-/** Services this user may see for this entity = entity scope ∩ user scope. */
+/**
+ * Product-stage gate: only these towers are wired up in this build. Not a
+ * per-user entitlement — every account is narrowed to this set regardless
+ * of what their contract lists, and the remaining contracted towers still
+ * show up in navigation as locked/"coming soon" rather than disappearing.
+ * Widen this list as each tower is built out.
+ */
+export const LOCKED_SERVICE_IDS: ServiceId[] = ["procurement", "idt", "dt"];
+
+/** Services this user may see for this entity = entity scope ∩ user scope ∩ build stage. */
 export function authorisedServices(user: PortalUser, entity: Entity): ServiceId[] {
-  const blocked = new Set(user.restrictedServices ?? []);
+  const blocked = new Set([...(user.restrictedServices ?? []), ...LOCKED_SERVICE_IDS]);
   return entity.services.filter((s) => !blocked.has(s));
+}
+
+/** Services this entity is contracted for but that are locked at this build stage. */
+export function lockedServicesFor(entity: Entity): ServiceDefinition[] {
+  const locked = new Set(LOCKED_SERVICE_IDS);
+  return entity.services.filter((s) => locked.has(s)).map((s) => SERVICE_MAP[s]);
 }

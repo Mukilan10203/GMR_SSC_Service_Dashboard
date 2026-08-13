@@ -267,6 +267,8 @@ export interface Kpi {
   serviceId: ServiceId;
   /** The sub-service this indicator measures, where it belongs to one. */
   subServiceId?: string;
+  /** Subfunction grouping label used to organise the KPI tab (e.g. "P2P - Payments"). */
+  group?: string;
   name: string;
   description: string;
   actual: number;

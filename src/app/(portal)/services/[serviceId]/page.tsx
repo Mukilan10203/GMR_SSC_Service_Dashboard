@@ -10,7 +10,7 @@ import {
   BillingTrend,
   ChargingModel,
   CompletionCard,
-  KpiCard,
+  KpiGroupSection,
   SlaBreakdown,
   UtilisationCard,
 } from "@/components/portal/service-blocks";
@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/primitives";
 import { ColumnChart } from "@/components/charts";
 import type { Issue, ServiceId } from "@/lib/domain/types";
+import { LOCKED_SERVICE_IDS } from "@/lib/mock/organisation";
 import { cx, formatMoney, formatNumber, formatPercent } from "@/lib/format";
 
 const TABS = [
@@ -64,12 +65,16 @@ function ServiceDetail() {
   const service = snapshot.services.find((s) => s.service.id === serviceId);
 
   if (!service) {
+    const locked = LOCKED_SERVICE_IDS.includes(serviceId);
     return (
       <div className="mx-auto max-w-[720px] py-20 text-center">
-        <h1 className="text-[20px] font-semibold text-ink">This service is not in your scope</h1>
+        <h1 className="text-[20px] font-semibold text-ink">
+          {locked ? "This service is locked" : "This service is not in your scope"}
+        </h1>
         <p className="mt-2 text-[13.5px] text-ink-3">
-          {snapshot.entity.name} either does not consume this service, or your account is not
-          authorised to view it.
+          {locked
+            ? "It is not yet available in this preview."
+            : `${snapshot.entity.name} either does not consume this service, or your account is not authorised to view it.`}
         </p>
         <Link
           href="/services"
@@ -87,6 +92,19 @@ function ServiceDetail() {
   const openIssues = issues.filter((i) => i.status !== "resolved");
   const feedback = snapshot.feedback.filter((f) => f.serviceId === def.id);
   const serviceBots = (snapshot.automation?.bots ?? []).filter((b) => b.serviceId === def.id);
+
+  /** KPIs bucketed by subfunction, "Overall" (the aggregate SLA KPI) first, then in first-seen order. */
+  const kpiGroups: [string, typeof service.kpis][] = (() => {
+    const overall = service.kpis.filter((k) => !k.group);
+    const rest = new Map<string, typeof service.kpis>();
+    for (const k of service.kpis) {
+      if (!k.group) continue;
+      if (!rest.has(k.group)) rest.set(k.group, []);
+      rest.get(k.group)!.push(k);
+    }
+    const groups: [string, typeof service.kpis][] = [...rest.entries()];
+    return overall.length > 0 ? [["Overall", overall], ...groups] : groups;
+  })();
 
   /** Each sub-service joined to the SLA component that measures it. */
   const subServices = def.subServices.map((sub) => ({
@@ -108,7 +126,6 @@ function ServiceDetail() {
         back={{ href: "/services", label: "Back to services" }}
         title={def.name}
         eyebrow={def.code}
-        subtitle={def.description}
         actions={
           <>
             <StatusPill status={service.sla.status}>
@@ -125,7 +142,7 @@ function ServiceDetail() {
             <ServiceGlyph serviceId={def.id} code={def.code} size={40} />
             <div>
               <p className="text-[13.5px] font-semibold text-ink">{def.code}</p>
-              <p className="text-[12px] text-ink-3">{def.tagline}</p>
+              <p className="text-[12px] text-ink-3">{def.name}</p>
             </div>
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-x-8 gap-y-3">
@@ -200,10 +217,7 @@ function ServiceDetail() {
       {tab === "overview" && (
         <div className="space-y-6">
           <section>
-            <SectionHeading
-              title={`What sits inside ${def.code}`}
-              subtitle={`${subServices.length} sub-services are delivered under this tower. Each one is measured separately and weighted into the headline service level.`}
-            />
+            <SectionHeading title={`What sits inside ${def.code}`} />
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {subServices.map((sub) => (
                 <Card key={sub.id} className="!p-4">
@@ -218,8 +232,6 @@ function ServiceDetail() {
                       </StatusPill>
                     )}
                   </div>
-
-                  <p className="mt-2.5 text-[12.5px] leading-relaxed text-ink-3">{sub.description}</p>
 
                   {sub.sla && (
                     <div className="mt-3.5">
@@ -257,20 +269,13 @@ function ServiceDetail() {
           </section>
 
           <section>
-            <SectionHeading
-              title="Service activity"
-              subtitle={`What the SSC processed for you in ${service.billing.currentMonthLabel}, and how that has moved through the year.`}
-            />
+            <SectionHeading title="Service activity" />
             <MetricGrid metrics={service.overview} color={color} />
           </section>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
             <Card>
-              <CardHeader
-                eyebrow="Volume"
-                title={service.activityChart.title}
-                subtitle="Solid bars are closed months; outlined bars are forecast at the current run rate."
-              />
+              <CardHeader eyebrow="Volume" title={service.activityChart.title} />
               <ColumnChart
                 data={service.activityChart.series.map((s) => ({
                   label: s.short,
@@ -300,10 +305,7 @@ function ServiceDetail() {
           </div>
 
           <section>
-            <SectionHeading
-              title="Performance summary"
-              subtitle="The headline indicators for this service. Full detail is on the KPI tab."
-            />
+            <SectionHeading title="Performance summary" />
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {service.kpis.slice(0, 4).map((k) => (
                 <StatTile
@@ -340,7 +342,6 @@ function ServiceDetail() {
               <CardHeader
                 eyebrow="Digital workforce"
                 title={`${serviceBots.length} automation${serviceBots.length > 1 ? "s are" : " is"} running inside ${def.code}`}
-                subtitle="Bots and AI agents licensed to this tower. The full control tower shows every job and exception."
                 action={
                   <Link
                     href="/automation"
@@ -383,7 +384,6 @@ function ServiceDetail() {
           <section>
             <SectionHeading
               title={`Why you are charged ${formatMoney(service.billing.currentTotal)} this month`}
-              subtitle="Two charging models apply to this service. Every line below is a counted volume multiplied by a contracted rate."
             />
             <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <StatTile
@@ -440,7 +440,6 @@ function ServiceDetail() {
           <section>
             <SectionHeading
               title="Key performance indicators"
-              subtitle={`${service.kpis.length} indicators are contracted for this service. Each one shows the actual, the target, the direction of travel, and the work sitting behind the number.`}
               action={
                 <div className="flex gap-2">
                   {(["good", "warn", "bad"] as const).map((st) => {
@@ -455,9 +454,17 @@ function ServiceDetail() {
                 </div>
               }
             />
-            <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-              {service.kpis.map((k) => (
-                <KpiCard key={k.id} kpi={k} issues={issues} feedback={feedback} color={color} />
+            <div className="space-y-3">
+              {kpiGroups.map(([group, kpis], i) => (
+                <KpiGroupSection
+                  key={group}
+                  title={group}
+                  kpis={kpis}
+                  issues={issues}
+                  feedback={feedback}
+                  color={color}
+                  defaultOpen={i === 0}
+                />
               ))}
             </div>
           </section>
@@ -470,10 +477,7 @@ function ServiceDetail() {
       {tab === "issues" && (
         <div className="space-y-6">
           <section>
-            <SectionHeading
-              title="Open issues"
-              subtitle="Everything currently open against this service, with ownership and ageing against the agreed resolution target. Select any row for the full history."
-            />
+            <SectionHeading title="Open issues" />
             <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {[
                 { label: "Open items", value: openIssues.length, status: undefined },
@@ -513,11 +517,7 @@ function ServiceDetail() {
           {issues.some((i) => i.status === "resolved") && (
             <Card padded={false}>
               <div className="p-5">
-                <CardHeader
-                  eyebrow="Closed"
-                  title="Recently resolved"
-                  subtitle="Closed in the last 30 days, with the resolution recorded."
-                />
+                <CardHeader eyebrow="Closed" title="Recently resolved" />
                 <IssueTable
                   issues={issues.filter((i) => i.status === "resolved")}
                   onSelect={setOpenIssue}
@@ -527,11 +527,7 @@ function ServiceDetail() {
             </Card>
           )}
 
-          <FeedbackList
-            feedback={feedback}
-            title="What your people are saying about this service"
-            subtitle="Feedback submitted by the business users who consume this service, linked to the indicator it relates to."
-          />
+          <FeedbackList feedback={feedback} title="What your people are saying about this service" />
         </div>
       )}
 

@@ -68,7 +68,6 @@ export function KpiCard({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h3 className="text-[14px] leading-snug font-semibold text-ink">{kpi.name}</h3>
-          <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">{kpi.description}</p>
         </div>
         <StatusPill status={kpi.status} size="sm" />
       </div>
@@ -203,6 +202,63 @@ export function KpiCard({
       <p className="mt-3.5 border-t border-line-soft pt-3">
         <SourceTag system={kpi.sourceSystem} />
       </p>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* KPI group — a collapsible subfunction section for the full KPI list */
+/* ------------------------------------------------------------------ */
+
+export function KpiGroupSection({
+  title,
+  kpis,
+  issues,
+  feedback,
+  color,
+  defaultOpen = false,
+}: {
+  title: string;
+  kpis: Kpi[];
+  issues: Issue[];
+  feedback: Feedback[];
+  color: string;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const counts = {
+    bad: kpis.filter((k) => k.status === "bad").length,
+    warn: kpis.filter((k) => k.status === "warn").length,
+  };
+
+  return (
+    <Card padded={false}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-3 px-5 py-4 text-left"
+        aria-expanded={open}
+      >
+        <IconChevronDown size={15} className={cx("shrink-0 text-ink-4 transition-transform", open && "rotate-180")} />
+        <span className="min-w-0 flex-1">
+          <span className="text-[13.5px] font-semibold text-ink">{title}</span>
+          <span className="ml-2 text-[12px] text-ink-4 tnum">
+            {kpis.length} indicator{kpis.length === 1 ? "" : "s"}
+          </span>
+        </span>
+        <span className="flex shrink-0 items-center gap-1.5">
+          {counts.bad > 0 && <Badge tone="bad">{counts.bad} off target</Badge>}
+          {counts.warn > 0 && <Badge tone="warn">{counts.warn} at risk</Badge>}
+        </span>
+      </button>
+
+      {open && (
+        <div className="grid gap-4 border-t border-line p-5 lg:grid-cols-2 2xl:grid-cols-3">
+          {kpis.map((k) => (
+            <KpiCard key={k.id} kpi={k} issues={issues} feedback={feedback} color={color} />
+          ))}
+        </div>
+      )}
     </Card>
   );
 }

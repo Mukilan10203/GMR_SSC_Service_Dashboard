@@ -8,7 +8,7 @@ import { usePortalData, useUserScope } from "./usePortalData";
 import { PortalMark } from "./PortalMark";
 import { downloadReport } from "./export";
 import { cx, formatMoney } from "@/lib/format";
-import { SERVICE_MAP } from "@/lib/mock/organisation";
+import { lockedServicesFor, SERVICE_MAP } from "@/lib/mock/organisation";
 import { DEMO_AS_OF_LABEL } from "@/lib/mock/calendar";
 import { serviceColor, StatusDot } from "@/components/ui/primitives";
 import {
@@ -21,6 +21,7 @@ import {
   IconClose,
   IconDownload,
   IconIssues,
+  IconLock,
   IconLogout,
   IconMenu,
   IconOverview,
@@ -514,6 +515,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const [servicesOpen, setServicesOpen] = useState(true);
 
   const services = snapshot?.services ?? [];
+  const locked = snapshot ? lockedServicesFor(snapshot.entity) : [];
   const showPortfolio = (user?.entityIds.length ?? 0) > 1;
 
   const nav = NAV;
@@ -597,6 +599,18 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                         </li>
                       );
                     })}
+                    {locked.map((s) => (
+                      <li key={s.id}>
+                        <span
+                          className="flex cursor-not-allowed items-center gap-2 rounded-md px-2.5 py-[7px] text-[12.5px] text-rail-ink-dim/70"
+                          title={`${s.name} — coming soon`}
+                        >
+                          <span className="size-1.5 shrink-0 rounded-full bg-rail-ink-dim/40" />
+                          <span className="min-w-0 flex-1 truncate">{s.code}</span>
+                          <IconLock size={11} className="shrink-0" />
+                        </span>
+                      </li>
+                    ))}
                   </ul>
                 )}
               </li>

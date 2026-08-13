@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePortalData } from "@/components/portal/usePortalData";
-import { PageHeader, ServiceCard } from "@/components/portal/blocks";
+import { LockedServiceCard, PageHeader, ServiceCard } from "@/components/portal/blocks";
+import { lockedServicesFor } from "@/lib/mock/organisation";
 import {
   Badge,
   Card,
@@ -25,6 +26,7 @@ export default function ServicesPage() {
   if (!snapshot) return null;
 
   const { services, entity, billing, cx: exp } = snapshot;
+  const locked = lockedServicesFor(entity);
 
   return (
     <div className="mx-auto max-w-[1440px]">
@@ -33,10 +35,9 @@ export default function ServicesPage() {
         title="Services provided to your organisation"
         subtitle={
           <>
-            {services.length} of the SSC&rsquo;s five service towers — F&amp;A, HR Ops, Procurement
-            &amp; Contracts, Indirect Tax and Direct Tax — are contracted to {entity.name}. Each card
-            shows current usage, service level and cost; open any service for its sub-services,
-            billing, performance and issue detail.
+            {services.length} service tower{services.length === 1 ? "" : "s"} {services.length === 1 ? "is" : "are"} live
+            for {entity.name} in this preview
+            {locked.length > 0 && <> · {locked.length} more shown locked below</>}.
           </>
         }
       />
@@ -44,6 +45,9 @@ export default function ServicesPage() {
       <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {services.map((s) => (
           <ServiceCard key={s.service.id} service={s} />
+        ))}
+        {locked.map((s) => (
+          <LockedServiceCard key={s.id} service={s} />
         ))}
       </div>
 
@@ -115,6 +119,22 @@ export default function ServicesPage() {
                       {(s.utilisation * 100).toFixed(0)}%
                     </Td>
                     <Td align="right">{s.issueIds.length}</Td>
+                  </tr>
+                ))}
+                {locked.map((s) => (
+                  <tr key={s.id} className="opacity-50">
+                    <Td>
+                      <span className="flex items-center gap-2.5">
+                        <span className="size-2.5 shrink-0 rounded-full bg-line-strong" />
+                        <span>
+                          <span className="block font-medium text-ink-3">{s.code}</span>
+                          <span className="block text-[11.5px] text-ink-4">{s.name}</span>
+                        </span>
+                      </span>
+                    </Td>
+                    <Td align="right" colSpan={9} muted>
+                      Locked — not yet available in this preview
+                    </Td>
                   </tr>
                 ))}
                 <tr>

@@ -43,7 +43,7 @@ import {
   type FteLineSpec,
   type TxnLineSpec,
 } from "./rate-cards";
-import { KPI_SPECS } from "./kpis";
+import { KPI_SPECS, type KpiSpec } from "./kpis";
 import {
   FEEDBACK_TEMPLATES,
   ISSUE_TEMPLATES,
@@ -589,6 +589,37 @@ function buildMetricContext(
 /* KPIs                                                                */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Fallback for `KpiSpec`s whose `metricKey` has no entry in the derived
+ * quality context — the bulk raw-KPI list imported from the customer's
+ * existing KPI tracker, which has no per-item volume driver to hang a real
+ * ctx formula off. Deterministically seeded per entity + spec, so it is
+ * stable across renders and still varies meaningfully with `entity.opsDelta`
+ * the same way every hand-tuned ctx metric does — a structurally weaker
+ * entity drifts more of its raw KPIs into warn/bad, not just the flagship
+ * ones.
+ */
+function syntheticActual(spec: KpiSpec, entity: Entity): number {
+  const d = entity.opsDelta;
+  const j = jitter(`raw-actual-${entity.id}-${spec.id}`);
+  const sign = spec.direction === "higher-better" ? 1 : -1;
+
+  if (spec.unit === "percent") {
+    const base = spec.target + sign * 2.2;
+    const lo = clamp(spec.target - 22, 0, 95);
+    const hi = clamp(spec.target + 22, 5, 100);
+    return clamp(base + sign * d * 1.1 + j * 2.6, lo, hi);
+  }
+  if (spec.unit === "days" || spec.unit === "hours") {
+    const margin = Math.max(0.2, spec.target * 0.12);
+    const base = Math.max(0.1, spec.target - margin);
+    return Math.max(0.1, base - d * (spec.target * 0.05) + j * Math.max(0.3, spec.target * 0.16));
+  }
+  const margin = Math.max(0.5, spec.target * 0.25);
+  const base = Math.max(0, spec.target - margin);
+  return Math.max(0, base - d * (spec.target * 0.06) + j * Math.max(0.5, spec.target * 0.3));
+}
+
 function buildKpis(
   entity: Entity,
   serviceId: ServiceId,
@@ -601,7 +632,8 @@ function buildKpis(
   const cur = def.actualMonthCount - 1;
 
   return KPI_SPECS.filter((s) => s.serviceId === serviceId).map((spec) => {
-    const actual = round2(ctx[spec.metricKey] ?? 0);
+    const resolved = ctx[spec.metricKey];
+    const actual = round2(resolved ?? syntheticActual(spec, entity));
     const status = gradeAgainstTarget(actual, spec.target, spec.direction, spec.amberBandPct / 100);
 
     const series = period.months.map((mo, m) => {
@@ -610,7 +642,8 @@ function buildKpis(
       let v = actual + drift + noise;
       if (spec.unit === "percent") v = clamp(v, 0, 100);
       if (spec.unit === "score") v = clamp(v, 1, 5);
-      if (spec.unit === "days" || spec.unit === "ratio") v = Math.max(0.1, v);
+      if (spec.unit === "days" || spec.unit === "ratio" || spec.unit === "hours") v = Math.max(0.1, v);
+      if (spec.unit === "number") v = Math.max(0, v);
       return { monthKey: mo.key, short: mo.short, value: round2(v), isActual: mo.isActual };
     });
     series[cur].value = actual;
@@ -646,6 +679,7 @@ function buildKpis(
       id: spec.id,
       serviceId,
       subServiceId: spec.subServiceId,
+      group: spec.group,
       name: spec.name,
       description: spec.description,
       actual,

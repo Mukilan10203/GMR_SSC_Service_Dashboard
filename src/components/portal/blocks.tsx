@@ -6,6 +6,7 @@ import type {
   ActivityMetric,
   AttentionItem,
   EntitySnapshot,
+  ServiceDefinition,
   ServiceSnapshot,
 } from "@/lib/domain/types";
 import { cx, formatMetric, formatMoney } from "@/lib/format";
@@ -19,7 +20,7 @@ import {
   StatusPill,
 } from "@/components/ui/primitives";
 import { Sparkline } from "@/components/charts";
-import { IconChevron } from "./icons";
+import { IconChevron, IconLock } from "./icons";
 
 /* ------------------------------------------------------------------ */
 /* Page header                                                         */
@@ -256,6 +257,33 @@ export function ServiceCard({ service }: { service: ServiceSnapshot }) {
         </div>
       </div>
     </Link>
+  );
+}
+
+/** A contracted tower not yet wired up in this build — shown, not hidden. */
+export function LockedServiceCard({ service }: { service: ServiceDefinition }) {
+  return (
+    <div
+      className="card flex flex-col overflow-hidden opacity-60"
+      aria-disabled
+      title={`${service.name} — coming soon`}
+    >
+      <span aria-hidden className="h-[3px] w-full bg-line-strong" />
+      <div className="flex flex-1 flex-col items-start p-5">
+        <div className="flex w-full items-start gap-3">
+          <ServiceGlyph serviceId={service.id} code={service.code} />
+          <div className="min-w-0 flex-1">
+            <p className="text-[15px] leading-tight font-semibold text-ink-3">{service.code}</p>
+            <p className="mt-0.5 truncate text-[12.5px] text-ink-4">{service.name}</p>
+          </div>
+          <Badge tone="outline" className="gap-1">
+            <IconLock size={11} />
+            Locked
+          </Badge>
+        </div>
+        <p className="mt-6 text-[12px] text-ink-4">This service is not yet available in this preview.</p>
+      </div>
+    </div>
   );
 }
 

@@ -3,7 +3,7 @@ import "./globals.css";
 import { SessionProvider } from "@/state/session";
 
 export const metadata: Metadata = {
-  title: "SSC Customer Portal",
+  title: "SSC Customer Portal | GMR Group",
   description:
     "Shared Service Centre customer portal — services, usage, billing, performance and insights in one place.",
 };
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0d2740",
+  themeColor: "#003974",
 };
 
 export default function RootLayout({

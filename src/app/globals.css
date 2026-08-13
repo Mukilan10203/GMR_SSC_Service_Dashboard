@@ -2,9 +2,11 @@
 
 /* ------------------------------------------------------------------
    SSC Customer Portal — design tokens
-   Restrained enterprise palette. Navy command rail, near-white canvas,
-   one accent, and a disciplined semantic status set. Numbers everywhere
-   are tabular so columns align like a financial statement.
+   GMR Group brand palette. The command rail and primary accent are the
+   Group's own navy (#003974); status and service-identity colours are
+   tuned toward the logo's red and amber without borrowing them outright,
+   so brand and semantic meaning never collide. Numbers everywhere are
+   tabular so columns align like a financial statement.
    ------------------------------------------------------------------ */
 
 /*
@@ -31,49 +33,52 @@
   --color-ink-3: #6b7688;
   --color-ink-4: #98a2b3;
 
-  /* Command rail (navy) */
-  --color-rail: #0d2740;
-  --color-rail-2: #0a1f34;
-  --color-rail-line: #1c3b58;
-  --color-rail-ink: #c3d1e0;
-  --color-rail-ink-dim: #7d95ad;
+  /* Command rail — GMR Group navy */
+  --color-rail: #003974;
+  --color-rail-2: #00284f;
+  --color-rail-line: #1c4a78;
+  --color-rail-ink: #c7d6e6;
+  --color-rail-ink-dim: #7fa0c0;
 
-  /* Accent */
-  --color-accent: #1b6bd6;
-  --color-accent-strong: #1557ad;
-  --color-accent-soft: #eaf2fd;
-  --color-accent-line: #c3ddf9;
+  /* Accent — the same brand navy carries every interactive element */
+  --color-accent: #003974;
+  --color-accent-strong: #00284f;
+  --color-accent-soft: #e8eef5;
+  --color-accent-line: #c3d3e3;
 
   /* Semantic status */
   --color-good: #0b8f5e;
   --color-good-soft: #e8f6f0;
   --color-good-line: #b6e3d0;
 
-  --color-warn: #b7791f;
-  --color-warn-soft: #fdf5e6;
-  --color-warn-line: #f0dcae;
+  --color-warn: #9c6b12;
+  --color-warn-soft: #fdf1e2;
+  --color-warn-line: #f0d9a8;
 
-  --color-bad: #c8352b;
-  --color-bad-soft: #fdeeed;
-  --color-bad-line: #f6cbc7;
+  --color-bad: #d2202a;
+  --color-bad-soft: #fdecea;
+  --color-bad-line: #f6c7c3;
 
   --color-neutral-soft: #f1f4f8;
 
-  /* Service identity — one per contracted tower. Used for charts, chips
-     and service accents. */
-  --color-svc-fna: #1b6bd6;
-  --color-svc-hrops: #7a5af8;
-  --color-svc-procurement: #dd8319;
-  --color-svc-idt: #0b8f5e;
-  --color-svc-dt: #0b9aaf;
-
-  /* Cross-cutting capabilities — not towers, but they need an accent */
-  --color-svc-automation: #c2255c;
-  --color-svc-analytics: #4b5fbd;
+  /* Service identity — one per contracted tower, plus the two cross-cutting
+     capabilities. Fixed hue order validated for CVD-safe adjacency
+     (protan/deutan ΔE ≥ 8, normal-vision ≥ 15) via the dataviz skill's
+     validator; slots reused from its documented palette keep that proof,
+     slots 1 and 3 are retuned toward the brand navy and amber. Do not
+     reorder or recolour without re-running the validator. */
+  --color-svc-fna: #1c5cab;
+  --color-svc-hrops: #4a3aa7;
+  --color-svc-procurement: #c97a1f;
+  --color-svc-idt: #1baf7a;
+  --color-svc-dt: #008300;
+  --color-svc-automation: #eda100;
+  --color-svc-analytics: #e87ba4;
 
   /* Type */
-  --font-sans: "Segoe UI Variable Display", "Segoe UI", Inter, ui-sans-serif,
-    system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Aptos", "Aptos Display", "Segoe UI Variable Display", "Segoe UI",
+    Inter, ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial,
+    sans-serif;
   --font-mono: "Cascadia Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   /* Radii */
@@ -83,7 +88,7 @@
   /* Elevation — very restrained; enterprise UIs read as flat + ruled */
   --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.03);
   --shadow-raised: 0 4px 12px rgba(16, 24, 40, 0.07), 0 1px 3px rgba(16, 24, 40, 0.04);
-  --shadow-pop: 0 12px 28px rgba(13, 39, 64, 0.14), 0 2px 6px rgba(13, 39, 64, 0.08);
+  --shadow-pop: 0 12px 28px rgba(0, 57, 116, 0.14), 0 2px 6px rgba(0, 57, 116, 0.08);
 }
 
 /* ------------------------------------------------------------------ */

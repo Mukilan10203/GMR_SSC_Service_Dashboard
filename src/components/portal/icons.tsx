@@ -134,3 +134,10 @@ export const IconMenu = ({ size = 20, className }: IconProps) => (
     <path d="M3 5.5h14M3 10h14M3 14.5h14" />
   </svg>
 );
+
+export const IconLock = ({ size = 16, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <rect x="4.5" y="9" width="11" height="8" rx="1.6" />
+    <path d="M6.5 9V6.2a3.5 3.5 0 0 1 7 0V9" />
+  </svg>
+);
