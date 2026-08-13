@@ -1,6 +1,5 @@
 "use client";
 
-
 import { useEffect } from "react";
 import Link from "next/link";
 import type { Feedback, Issue, IssueStatus, Kpi } from "@/lib/domain/types";
