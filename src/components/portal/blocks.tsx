@@ -55,7 +55,12 @@ export function PageHeader({
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           {eyebrow && <p className="eyebrow mb-1.5">{eyebrow}</p>}
-          <h1 className="text-[24px] leading-tight font-semibold tracking-[-0.02em] text-ink">{title}</h1>
+          <h1
+            className="text-[32px] leading-[1.12] font-bold tracking-[-0.035em]"
+            style={{ color: "var(--color-navy)" }}
+          >
+            {title}
+          </h1>
           {subtitle && <div className="mt-1.5 text-[13.5px] text-ink-3">{subtitle}</div>}
         </div>
         {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
@@ -147,7 +152,9 @@ export function AttentionSection({
     <section id="attention" className="scroll-mt-24">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-[17px] font-semibold tracking-[-0.015em] text-ink">Attention required</h2>
+          <h2 className="text-[19px] font-bold tracking-[-0.025em]" style={{ color: "var(--color-navy)" }}>
+            Attention required
+          </h2>
           <p className="mt-1 text-[13px] text-ink-3">
             {critical > 0
               ? `${critical} ${critical === 1 ? "item needs a decision" : "items need decisions"}`
@@ -274,7 +281,7 @@ export function LockedPage({ title }: { title: string }) {
       <p className="mt-2 text-[13.5px] text-ink-3">Not yet available in this preview.</p>
       <Link
         href="/overview"
-        className="mt-6 inline-block rounded-lg bg-rail px-4 py-2.5 text-[13px] font-medium text-white"
+        className="mt-6 inline-block btn-cta px-4 py-2.5 text-[13px] hover:-translate-y-px"
       >
         Back to overview
       </Link>
@@ -333,7 +340,7 @@ export function MetricGrid({
     <div className={cx("grid gap-3", cols)}>
       {metrics.map((m) => (
         <div key={m.id} className="card p-4">
-          <p className="eyebrow">{m.label}</p>
+          <p className="eyebrow-muted">{m.label}</p>
           <p className="metric mt-2 text-[21px] leading-7 font-semibold tracking-[-0.02em] text-ink">
             {formatMetric(m.value, m.format)}
           </p>
@@ -385,19 +392,19 @@ export function WelcomeHeader({
 
         <div className="flex flex-wrap items-center gap-6">
           <div>
-            <p className="eyebrow">Reporting period</p>
+            <p className="eyebrow-muted">Reporting period</p>
             <p className="mt-1.5 text-[15px] font-semibold text-ink">{snapshot.period.label}</p>
             <p className="mt-0.5 text-[11.5px] text-ink-4">{snapshot.period.range}</p>
           </div>
           <div>
-            <p className="eyebrow">Data as at</p>
+            <p className="eyebrow-muted">Data as at</p>
             <p className="mt-1.5 text-[15px] font-semibold text-ink tnum">{snapshot.period.asOf}</p>
             <p className="mt-0.5 text-[11.5px] text-ink-4">
               {snapshot.period.actualMonthCount} of 12 months closed
             </p>
           </div>
           <div>
-            <p className="eyebrow">Services consumed</p>
+            <p className="eyebrow-muted">Services consumed</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {snapshot.services.map((s) => (
                 <span

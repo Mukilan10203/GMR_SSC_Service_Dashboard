@@ -82,7 +82,7 @@ function ServiceDetail() {
         </p>
         <Link
           href="/services"
-          className="mt-5 inline-block rounded-lg bg-rail px-4 py-2.5 text-[13px] font-medium text-white"
+          className="mt-5 inline-block btn-cta px-4 py-2.5 text-[13px] hover:-translate-y-px"
         >
           Back to my services
         </Link>
@@ -153,25 +153,25 @@ function ServiceDetail() {
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-x-8 gap-y-3">
             <div>
-              <p className="eyebrow">This month</p>
+              <p className="eyebrow-muted">This month</p>
               <p className="mt-1 text-[15px] font-semibold text-ink tnum">
                 {formatMoney(service.billing.currentTotal)}
               </p>
             </div>
             <div>
-              <p className="eyebrow">Year to date</p>
+              <p className="eyebrow-muted">Year to date</p>
               <p className="mt-1 text-[15px] font-semibold text-ink tnum">
                 {formatMoney(service.billing.ytd)}
               </p>
             </div>
             <div>
-              <p className="eyebrow">Share of spend</p>
+              <p className="eyebrow-muted">Share of spend</p>
               <p className="mt-1 text-[15px] font-semibold text-ink tnum">
                 {(service.billing.mix * 100).toFixed(1)}%
               </p>
             </div>
             <div>
-              <p className="eyebrow">Open items</p>
+              <p className="eyebrow-muted">Open items</p>
               <p className="mt-1 text-[15px] font-semibold text-ink tnum">{openIssues.length}</p>
             </div>
           </div>
@@ -594,13 +594,13 @@ function HrVisualRow({ service, color }: { service: ServiceSnapshot; color: stri
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3 border-t border-line-soft pt-3.5">
           <div>
-            <p className="eyebrow">Closed YTD</p>
+            <p className="eyebrow-muted">Closed YTD</p>
             <p className="mt-1 text-[17px] font-semibold text-ink tnum">
               {formatNumber(metric("closed"))}
             </p>
           </div>
           <div>
-            <p className="eyebrow">Time to hire</p>
+            <p className="eyebrow-muted">Time to hire</p>
             <p className="mt-1 text-[17px] font-semibold text-ink tnum">
               {metric("tth").toFixed(1)} d
             </p>

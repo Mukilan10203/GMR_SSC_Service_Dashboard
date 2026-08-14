@@ -86,7 +86,7 @@ function IssuesView() {
           <button
             type="button"
             onClick={() => setRaising(true)}
-            className="rounded-lg bg-rail px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-rail-2"
+            className="btn-cta px-4 py-2.5 text-[13px] hover:-translate-y-px"
           >
             + Raise a ticket
           </button>
@@ -230,7 +230,7 @@ function IssuesView() {
           )}
 
           <div className="mt-5 border-t border-line-soft pt-4">
-            <p className="eyebrow mb-3">By priority</p>
+            <p className="eyebrow-muted mb-3">By priority</p>
             <HBarList
               items={(["critical", "high", "medium", "low"] as Priority[])
                 .map((p) => ({
@@ -358,7 +358,7 @@ function RaiseTicketModal({
       <div className="relative w-full max-w-[520px] rounded-xl border border-line bg-surface shadow-pop">
         <header className="flex items-center justify-between border-b border-line px-5 py-4">
           <div>
-            <p className="eyebrow">SSC Service Desk</p>
+            <p className="eyebrow-muted">SSC Service Desk</p>
             <h2 className="mt-1 text-[16px] font-semibold text-ink">Raise a ticket</h2>
           </div>
           <button type="button" onClick={onClose} className="text-ink-4 hover:text-ink-2" aria-label="Close">
@@ -472,7 +472,7 @@ function RaiseTicketModal({
             </button>
             <button
               type="submit"
-              className="rounded-lg bg-rail px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-rail-2"
+              className="btn-cta px-4 py-2.5 text-[13px] hover:-translate-y-px"
             >
               Submit to SSC
             </button>

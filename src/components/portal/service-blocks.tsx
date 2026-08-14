@@ -82,7 +82,7 @@ export function KpiCard({
     <Card className={cx(kpi.status === "bad" && "border-bad-line")}>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          {groupChip && <p className="eyebrow mb-1">{groupChip}</p>}
+          {groupChip && <p className="eyebrow-muted mb-1">{groupChip}</p>}
           {onOpen ? (
             <button
               type="button"
@@ -107,20 +107,20 @@ export function KpiCard({
 
       <div className="mt-4 flex items-end justify-between gap-4">
         <div>
-          <p className="eyebrow">Actual</p>
+          <p className="eyebrow-muted">Actual</p>
           <p className="metric mt-1 text-[27px] leading-8 font-semibold tracking-[-0.02em] text-ink">
             {formatMetric(kpi.actual, kpi.unit)}
           </p>
         </div>
         <div className="text-right">
-          <p className="eyebrow">Target</p>
+          <p className="eyebrow-muted">Target</p>
           <p className="mt-1 text-[15px] font-medium text-ink-2 tnum">
             {kpi.direction === "higher-better" ? "≥ " : "≤ "}
             {formatMetric(kpi.target, kpi.unit)}
           </p>
         </div>
         <div className="text-right">
-          <p className="eyebrow">Trend</p>
+          <p className="eyebrow-muted">Trend</p>
           <div className="mt-1.5">
             <TrendPill
               trend={kpi.trend}
@@ -182,7 +182,7 @@ export function KpiCard({
               {/* Performance gap */}
               {gap > 0 && (
                 <div className="rounded-lg border border-line bg-surface-sunken p-3.5">
-                  <p className="eyebrow mb-1.5">Performance gap</p>
+                  <p className="eyebrow-muted mb-1.5">Performance gap</p>
                   <p className="text-[13px] text-ink">
                     {formatMetric(gap, kpi.unit === "percent" ? "percent" : kpi.unit)} away from the
                     contracted target.
@@ -394,7 +394,7 @@ export function SlaBreakdown({ sla, color }: { sla: ServiceSla; color: string })
       </Table>
 
       <div className="mt-5 border-t border-line-soft pt-4">
-        <p className="eyebrow mb-3">Twelve-month trend</p>
+        <p className="eyebrow-muted mb-3">Twelve-month trend</p>
         <TrendChart
           data={sla.monthly.map((m) => ({ label: m.short, value: m.value, isActual: m.isActual }))}
           format={(n) => `${n.toFixed(1)}%`}
@@ -572,13 +572,13 @@ export function BillingDrivers({ billing, color }: { billing: ServiceBilling; co
           { label: "Against budget", value: formatPercent(billing.ytdVariancePct) + " YTD" },
         ].map((t) => (
           <div key={t.label} className="rounded-lg border border-line bg-surface-sunken p-3">
-            <p className="eyebrow">{t.label}</p>
+            <p className="eyebrow-muted">{t.label}</p>
             <p className="mt-1.5 text-[15px] font-semibold text-ink tnum">{t.value}</p>
           </div>
         ))}
       </div>
 
-      <p className="eyebrow mb-3">Contribution to the movement</p>
+      <p className="eyebrow-muted mb-3">Contribution to the movement</p>
       <ul className="space-y-3">
         {movers.map((d) => {
           const positive = d.deltaAmount >= 0;
@@ -668,7 +668,7 @@ export function BillingTrend({ billing, color }: { billing: ServiceBilling; colo
           },
         ].map((t) => (
           <div key={t.label}>
-            <p className="eyebrow">{t.label}</p>
+            <p className="eyebrow-muted">{t.label}</p>
             <p className="mt-1.5 text-[17px] font-semibold text-ink tnum">{t.value}</p>
             <p className="mt-0.5 text-[11.5px] text-ink-4">{t.hint}</p>
           </div>
@@ -714,15 +714,15 @@ export function UtilisationCard({
       />
       <div className="mt-4 grid grid-cols-3 gap-3 border-t border-line-soft pt-4">
         <div>
-          <p className="eyebrow">Peak month</p>
+          <p className="eyebrow-muted">Peak month</p>
           <p className="mt-1 text-[14px] font-semibold text-ink tnum">{formatNumber(peak)}</p>
         </div>
         <div>
-          <p className="eyebrow">Lowest month</p>
+          <p className="eyebrow-muted">Lowest month</p>
           <p className="mt-1 text-[14px] font-semibold text-ink tnum">{formatNumber(trough)}</p>
         </div>
         <div>
-          <p className="eyebrow">Variability</p>
+          <p className="eyebrow-muted">Variability</p>
           <p className="mt-1 text-[14px] font-semibold text-ink tnum">
             {(((peak - trough) / Math.max(1, trough)) * 100).toFixed(0)}%
           </p>
@@ -1340,7 +1340,7 @@ export function KpiDetailDrawer({
         <header className="sticky top-0 z-10 border-b border-line bg-surface px-6 py-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              {kpi.group && <p className="eyebrow mb-1.5">{kpi.group}</p>}
+              {kpi.group && <p className="eyebrow-muted mb-1.5">{kpi.group}</p>}
               <h2 className="text-[17px] leading-snug font-semibold text-ink">{kpi.name}</h2>
             </div>
             <div className="flex shrink-0 items-center gap-2">

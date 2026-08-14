@@ -63,7 +63,7 @@ function AnalyticsPageUnlocked() {
               m.direction === "higher-better" ? m.value >= 0 : m.format === "percent" ? m.value <= 3 : true;
             return (
               <Card key={m.id} className="!p-4">
-                <p className="eyebrow">{m.label}</p>
+                <p className="eyebrow-muted">{m.label}</p>
                 <p className="metric mt-2 text-[24px] leading-7 font-semibold tracking-[-0.02em] text-ink">
                   {m.format === "percent" && m.value > 0 ? "+" : ""}
                   {formatMetric(m.value, m.format)}

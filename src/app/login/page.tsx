@@ -5,46 +5,54 @@ import { useRouter } from "next/navigation";
 import { useSession } from "@/state/session";
 import { demoPassword, listDemoUsers } from "@/lib/api";
 import { ENTITIES, LOCATIONS, SERVICE_MAP } from "@/lib/mock/organisation";
-import { cx } from "@/lib/format";
 import { PortalMark } from "@/components/portal/PortalMark";
 
-const VALUE_PROPS = [
-  {
-    title: "Every service in one view",
-    body: "F&A and HR Ops — down to the sub-service: what you consume, what it costs and how it is performing.",
-  },
-  {
-    title: "Billing you can interrogate",
-    body: "Every rupee traced back to a transaction volume or an FTE on your rate card, with the drivers behind each movement.",
-  },
-  {
-    title: "Problems that find you",
-    body: "SLA breaches, ageing issues and billing anomalies are surfaced against the service and the owner accountable for them.",
-  },
-];
+/**
+ * Sign-in, styled as the "Choose your business workspace" card from the
+ * GMR Transformation Engine design system: a centred modal card on a soft
+ * gradient, a red eyebrow, a navy heading, and one tile per workspace.
+ * No credentials are typed — selecting a workspace signs you into it.
+ */
+
+const WORKSPACE_ICON: Record<string, string> = {
+  "cfo@delhiairport.demo": "✈",
+  "group.cfo@gmrgroup.demo": "◈",
+  "ceo@hyderabadairport.demo": "⚡",
+  "hr.head@delhiairport.demo": "◎",
+  "tax.head@delhiairport.demo": "▣",
+};
+
+/** The scope a persona signs into: one entity, a single-location cluster, or the group. */
+function scopeLabel(entityIds: string[]): string {
+  if (entityIds.length === 1) {
+    return ENTITIES.find((e) => e.id === entityIds[0])?.name ?? "Workspace";
+  }
+  const entities = ENTITIES.filter((e) => entityIds.includes(e.id));
+  const locations = new Set(entities.map((e) => e.locationId));
+  if (locations.size === 1) {
+    const loc = LOCATIONS.find((l) => l.id === entities[0].locationId);
+    return `${loc?.name} cluster`;
+  }
+  return "GMR Group";
+}
 
 export default function LoginPage() {
   const { login, user, ready } = useSession();
   const router = useRouter();
-
-  const [email, setEmail] = useState("cfo@delhiairport.demo");
-  const [password, setPassword] = useState(demoPassword);
-  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
     if (ready && user) router.replace("/overview");
   }, [ready, user, router]);
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const signIn = (email: string) => {
     setError(null);
-    setBusy(true);
-    const result = login(email, password);
+    setBusy(email);
+    const result = login(email, demoPassword);
     if (!result.ok) {
       setError(result.error ?? "Unable to sign in.");
-      setBusy(false);
+      setBusy(null);
       return;
     }
     router.replace("/overview");
@@ -53,204 +61,118 @@ export default function LoginPage() {
   const users = listDemoUsers();
 
   return (
-    <main className="grid min-h-dvh lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
-      {/* ---------------------------------------------------------- */}
-      {/* Brand panel                                                */}
-      {/* ---------------------------------------------------------- */}
-      <section className="relative hidden flex-col justify-between overflow-hidden bg-rail px-12 py-12 lg:flex">
-        <div
-          aria-hidden
-          className="absolute inset-0 opacity-[0.5]"
-          style={{
-            background:
-              "radial-gradient(1100px 520px at 12% -8%, rgba(56,116,182,0.42), transparent 62%), radial-gradient(760px 460px at 96% 108%, rgba(20,74,120,0.5), transparent 60%)",
-          }}
-        />
-        <div className="relative">
-          <PortalMark tone="light" />
-        </div>
+    <main
+      className="grid min-h-dvh place-items-center px-5 py-10"
+      style={{
+        background:
+          "linear-gradient(135deg,#f8fbff 0%,#eff7ff 52%,#f5fffe 100%)",
+      }}
+    >
+      {/* Soft brand glow, as on the reference hero */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 overflow-hidden"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(6,63,145,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(6,63,145,.04) 1px,transparent 1px)",
+          backgroundSize: "46px 46px",
+          maskImage: "linear-gradient(90deg,transparent,black)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none fixed -top-32 -right-40 size-[620px] rounded-full"
+        style={{
+          background:
+            "radial-gradient(circle at 42% 42%,rgba(246,160,26,.20),rgba(6,63,145,.10) 32%,transparent 66%)",
+        }}
+      />
 
-        <div className="relative max-w-lg">
-          <h1 className="text-[34px] leading-[1.15] font-semibold tracking-[-0.02em] text-white">
-            Everything your Shared Service Centre does for you, in one place.
-          </h1>
-          <ul className="mt-9 space-y-6">
-            {VALUE_PROPS.map((v) => (
-              <li key={v.title} className="border-l-2 border-rail-line pl-4">
-                <p className="text-[14px] font-semibold text-white">{v.title}</p>
-                <p className="mt-1 text-[13.5px] leading-relaxed text-rail-ink">{v.body}</p>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <p className="relative text-[12px] text-rail-ink-dim">
-          Prototype build · Illustrative data only · No production system is connected
-        </p>
-      </section>
-
-      {/* ---------------------------------------------------------- */}
-      {/* Sign-in                                                    */}
-      {/* ---------------------------------------------------------- */}
-      <section className="flex flex-col justify-center px-6 py-10 sm:px-12 lg:px-16">
-        <div className="mx-auto w-full max-w-[440px]">
-          <div className="lg:hidden">
-            <PortalMark tone="dark" />
-          </div>
-
-          <h2 className="mt-8 text-[26px] font-semibold tracking-[-0.02em] text-ink lg:mt-0">
-            Sign in
-          </h2>
-          <p className="mt-1.5 text-[13.5px] text-ink-3">
-            Use your organisation email address to access your service portal.
-          </p>
-
-          <form onSubmit={submit} className="mt-7 space-y-4" noValidate>
-            <div>
-              <label htmlFor="email" className="mb-1.5 block text-[12.5px] font-medium text-ink-2">
-                Email address
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="username"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors placeholder:text-ink-4 focus:border-accent"
-                placeholder="name@organisation.com"
-              />
-            </div>
-
-            <div>
-              <div className="mb-1.5 flex items-baseline justify-between">
-                <label htmlFor="password" className="text-[12.5px] font-medium text-ink-2">
-                  Password
-                </label>
-                <button
-                  type="button"
-                  className="text-[12.5px] font-medium text-accent hover:text-accent-strong"
-                  onClick={() => setError("Password reset is not enabled in this prototype.")}
-                >
-                  Forgot password?
-                </button>
-              </div>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors placeholder:text-ink-4 focus:border-accent"
-                placeholder="••••••••"
-              />
-            </div>
-
-            <label className="flex items-center gap-2.5 pt-0.5 text-[13px] text-ink-2 select-none">
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
-                className="size-4 rounded border-line-strong accent-[var(--color-accent)]"
-              />
-              Keep me signed in on this device
-            </label>
-
-            {error && (
-              <p
-                role="alert"
-                className="rounded-lg border border-bad-line bg-bad-soft px-3 py-2.5 text-[12.5px] text-bad"
-              >
-                {error}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={busy}
-              className="w-full rounded-lg bg-rail px-4 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-rail-2 disabled:opacity-70"
+      <div
+        className="relative w-full max-w-[720px] overflow-hidden bg-surface"
+        style={{ borderRadius: 20, boxShadow: "0 30px 80px rgba(3,15,34,.22)" }}
+      >
+        {/* Head */}
+        <header className="flex items-start justify-between gap-4 border-b border-line px-6 py-6 sm:px-7">
+          <div className="min-w-0">
+            <p className="eyebrow">Secure customer access</p>
+            <h1
+              className="mt-2 text-[26px] leading-[1.12] font-semibold tracking-[-0.035em] sm:text-[28px]"
+              style={{ color: "var(--color-navy)" }}
             >
-              {busy ? "Signing in…" : "Sign in"}
-            </button>
-          </form>
+              Choose your business workspace
+            </h1>
+          </div>
+          <PortalMark tone="dark" compact />
+        </header>
 
-          {/* Demo personas */}
-          <div className="mt-9 border-t border-line pt-6">
-            <div className="flex items-baseline justify-between">
-              <p className="eyebrow">Demo accounts</p>
-              <p className="text-[11.5px] text-ink-4">
-                Password <code className="rounded bg-neutral-soft px-1.5 py-0.5 font-mono text-ink-2">{demoPassword}</code>
-              </p>
-            </div>
-            <p className="mt-2 text-[12.5px] leading-relaxed text-ink-3">
-              Each account carries a different scope. The portal only ever shows the entities and
-              services that account is authorised for.
-            </p>
+        {/* Body */}
+        <div className="px-6 py-6 sm:px-7">
+          <p className="mb-5 text-center text-[14px] leading-relaxed text-ink-3">
+            Select a customer profile to preview its services, performance, billing and the value the
+            Shared Service Centre is creating.
+          </p>
 
-            <ul className="mt-3.5 space-y-2">
-              {users.map((u) => {
-                const entity = ENTITIES.find((e) => e.id === u.entityIds[0]);
-                const location = LOCATIONS.find((l) => l.id === entity?.locationId);
-                const services = (entity?.services ?? []).filter(
-                  (s) => !(u.restrictedServices ?? []).includes(s),
-                );
-                const selected = email.toLowerCase() === u.email;
-                return (
-                  <li key={u.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEmail(u.email);
-                        setPassword(demoPassword);
-                        setError(null);
-                      }}
-                      className={cx(
-                        "w-full rounded-lg border px-3.5 py-3 text-left transition-colors",
-                        selected
-                          ? "border-accent-line bg-accent-soft"
-                          : "border-line bg-surface hover:border-line-strong hover:bg-surface-sunken",
-                      )}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={cx(
-                            "flex size-8 shrink-0 items-center justify-center rounded-full text-[11.5px] font-semibold",
-                            selected ? "bg-accent text-white" : "bg-neutral-soft text-ink-2",
-                          )}
-                        >
-                          {u.initials}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-[13px] font-medium text-ink">
-                            {u.role} —{" "}
-                            {u.entityIds.length > 1
-                              ? `${u.entityIds.length} entities`
-                              : entity?.name}
-                          </p>
-                          <p className="truncate font-mono text-[11.5px] text-ink-3">{u.email}</p>
-                        </div>
-                      </div>
-                      <p className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-4">
-                        <span>{u.entityIds.length > 1 ? `${u.entityIds.length} entities` : location?.name}</span>
-                        <span aria-hidden>·</span>
-                        <span>
-                          {u.entityIds.length > 1
-                            ? "All services"
-                            : services.map((s) => SERVICE_MAP[s].code).join(" · ")}
-                        </span>
-                      </p>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            {users.map((u) => {
+              const entity = ENTITIES.find((e) => e.id === u.entityIds[0]);
+              const location = LOCATIONS.find((l) => l.id === entity?.locationId);
+              const services = (entity?.services ?? []).filter(
+                (s) => !(u.restrictedServices ?? []).includes(s),
+              );
+              const multi = u.entityIds.length > 1;
+              const scope = scopeLabel(u.entityIds);
+              return (
+                <button
+                  key={u.id}
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => signIn(u.email)}
+                  className="group rounded-[13px] border border-line bg-surface p-[18px] text-left transition-all hover:-translate-y-0.5 hover:border-accent hover:bg-accent-soft disabled:opacity-60"
+                >
+                  <span className="text-[23px] leading-none" aria-hidden>
+                    {WORKSPACE_ICON[u.email] ?? "◆"}
+                  </span>
+                  <b
+                    className="mt-2.5 block text-[16px] font-semibold"
+                    style={{ color: "var(--color-navy)" }}
+                  >
+                    {u.role}
+                  </b>
+                  <span className="mt-1 block text-[11.5px] leading-relaxed text-ink-3">
+                    {scope}
+                    {multi
+                      ? ` · ${u.entityIds.length} entities`
+                      : ` · ${location?.name}`}
+                    <br />
+                    {multi
+                      ? "All contracted services"
+                      : services.map((s) => SERVICE_MAP[s].name).join(", ")}
+                  </span>
+                  <span className="mt-3 block text-[11px] font-semibold text-accent">
+                    {busy === u.email ? "Signing in…" : "Enter workspace →"}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
-          <p className="mt-7 text-[11.5px] leading-relaxed text-ink-4">
-            This is a demonstration build. Authentication is simulated, all figures are illustrative,
-            and no SAP, Ariba, HR or automation system is connected.
-          </p>
+          {error && (
+            <p
+              role="alert"
+              className="mt-4 rounded-[10px] border border-bad-line bg-bad-soft px-3 py-2.5 text-[12.5px] text-bad"
+            >
+              {error}
+            </p>
+          )}
+
+          <div className="mt-[17px] rounded-[10px] bg-canvas p-[11px] text-[11px] leading-relaxed text-ink-3">
+            <b style={{ color: "var(--color-navy)" }}>Leadership prototype:</b> No credentials are
+            required. Every figure is illustrative and no production system is connected. Role-based
+            access can be previewed inside the workspace.
+          </div>
         </div>
-      </section>
+      </div>
     </main>
   );
 }

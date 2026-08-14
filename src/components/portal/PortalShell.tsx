@@ -487,7 +487,10 @@ function AccountMenu() {
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2.5 rounded-lg border border-line bg-surface py-1 pr-2 pl-1 transition-colors hover:border-line-strong"
       >
-        <span className="flex size-7 items-center justify-center rounded-md bg-rail text-[11px] font-semibold text-white">
+        <span
+          className="flex size-[35px] items-center justify-center rounded-full text-[12px] font-extrabold text-white"
+          style={{ background: "linear-gradient(135deg,var(--color-navy),var(--color-accent))" }}
+        >
           {user.initials}
         </span>
         <span className="hidden text-left lg:block">
@@ -555,10 +558,10 @@ function Sidebar({
   const nav = NAV;
 
   return (
-    <div className="flex h-full flex-col bg-rail">
-      <div className={cx("py-5", collapsed ? "flex justify-center px-3" : "px-5")}>
+    <div className="flex h-full flex-col border-r border-line bg-rail">
+      <div className={cx("border-b border-line py-4", collapsed ? "flex justify-center px-3" : "px-5")}>
         <Link href="/overview" onClick={onNavigate} title="SSC Customer Portal">
-          <PortalMark tone="light" compact={collapsed} />
+          <PortalMark tone="dark" compact={collapsed} />
         </Link>
       </div>
 
@@ -578,11 +581,11 @@ function Sidebar({
                       "flex flex-1 items-center rounded-lg py-2 text-[13.5px] transition-colors",
                       collapsed ? "justify-center px-0" : "gap-2.5 px-3",
                       active
-                        ? "bg-white/[0.09] font-medium text-white"
-                        : "text-rail-ink hover:bg-white/[0.05] hover:text-white",
+                        ? "bg-rail-active font-semibold text-accent"
+                        : "text-rail-ink hover:bg-rail-active hover:text-accent",
                     )}
                   >
-                    <Icon size={17} className={active ? "text-white" : "text-rail-ink-dim"} />
+                    <Icon size={17} className={active ? "text-accent" : "text-rail-ink-dim"} />
                     {!collapsed && label}
                   </Link>
                   {expandable && !collapsed && (
@@ -613,8 +616,8 @@ function Sidebar({
                             className={cx(
                               "flex items-center gap-2 rounded-md px-2.5 py-[7px] text-[12.5px] transition-colors",
                               sactive
-                                ? "bg-white/[0.08] font-medium text-white"
-                                : "text-rail-ink hover:bg-white/[0.05] hover:text-white",
+                                ? "bg-rail-active font-semibold text-accent"
+                                : "text-rail-ink hover:bg-rail-active hover:text-accent",
                             )}
                           >
                             <span
@@ -689,11 +692,11 @@ function Sidebar({
                   "flex items-center rounded-lg py-2 text-[13.5px] transition-colors",
                   collapsed ? "justify-center px-0" : "gap-2.5 px-3",
                   pathname.startsWith("/portfolio")
-                    ? "bg-white/[0.09] font-medium text-white"
-                    : "text-rail-ink hover:bg-white/[0.05] hover:text-white",
+                    ? "bg-rail-active font-semibold text-accent"
+                    : "text-rail-ink hover:bg-rail-active hover:text-accent",
                 )}
               >
-                <IconPortfolio size={17} className={pathname.startsWith("/portfolio") ? "text-white" : "text-rail-ink-dim"} />
+                <IconPortfolio size={17} className={pathname.startsWith("/portfolio") ? "text-accent" : "text-rail-ink-dim"} />
                 {!collapsed && "Portfolio"}
               </Link>
             </li>
@@ -704,16 +707,16 @@ function Sidebar({
       <div className={cx("border-t border-rail-line px-5 py-4", collapsed && "hidden")}>
         {snapshot && (
           <>
-            <p className="text-[11px] tracking-wide text-rail-ink-dim uppercase">Contracted with</p>
-            <p className="mt-1 text-[12.5px] leading-snug font-medium text-white">
+            <p className="eyebrow-muted">Contracted with</p>
+            <p className="mt-1.5 text-[12.5px] leading-snug font-semibold" style={{ color: "var(--color-navy)" }}>
               {snapshot.entity.legalName}
             </p>
-            <p className="mt-1.5 text-[11px] text-rail-ink-dim">
+            <p className="mt-1 text-[11px] text-ink-4">
               Relationship manager · {snapshot.entity.relationshipManager}
             </p>
           </>
         )}
-        <p className="mt-3 border-t border-rail-line pt-3 text-[10.5px] leading-relaxed text-rail-ink-dim">
+        <p className="mt-3 border-t border-rail-line pt-3 text-[10.5px] leading-relaxed text-ink-4">
           Prototype build · illustrative data as at {DEMO_AS_OF_LABEL}
         </p>
       </div>
@@ -767,8 +770,8 @@ export function PortalShell({ children }: { children: ReactNode }) {
       )}
 
       <div className="flex min-w-0 flex-col">
-        <header className="sticky top-0 z-40 border-b border-line bg-canvas/85 backdrop-blur-md">
-          <div className="flex flex-wrap items-center gap-3 px-5 py-3 xl:px-8">
+        <header className="sticky top-0 z-40 border-b border-line bg-surface">
+          <div className="flex min-h-[68px] flex-wrap items-center gap-3 px-5 py-3 xl:px-6">
             <button
               type="button"
               onClick={toggleRail}

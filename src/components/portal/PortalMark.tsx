@@ -49,7 +49,7 @@ export function PortalMark({
   tone?: "light" | "dark";
   compact?: boolean;
 }) {
-  const primary = tone === "light" ? "#ffffff" : "var(--color-ink)";
+  const primary = tone === "light" ? "#ffffff" : "var(--color-navy)";
   const secondary = tone === "light" ? "var(--color-rail-ink-dim)" : "var(--color-ink-3)";
 
   return (
@@ -62,11 +62,17 @@ export function PortalMark({
         <GmrMark className="h-7 w-11 shrink-0" />
       )}
       {!compact && (
-        <div className="leading-none">
-          <p className={cx("text-[14.5px] font-semibold tracking-[-0.01em]")} style={{ color: primary }}>
+        <div className="border-l border-line pl-3 leading-none">
+          <p
+            className={cx("text-[14px] leading-[1.15] font-extrabold tracking-[-0.01em]")}
+            style={{ color: primary }}
+          >
             SSC Customer Portal
           </p>
-          <p className="mt-1 text-[11px]" style={{ color: secondary }}>
+          <p
+            className="mt-0.5 text-[8px] font-bold tracking-[0.12em] uppercase"
+            style={{ color: secondary }}
+          >
             Shared Service Centre
           </p>
         </div>

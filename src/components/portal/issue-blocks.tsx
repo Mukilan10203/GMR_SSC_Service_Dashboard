@@ -192,7 +192,7 @@ export function IssueDrawer({
               { label: "Resolution target", value: `${issue.slaTargetDays} days` },
             ].map((d) => (
               <div key={d.label}>
-                <dt className="eyebrow">{d.label}</dt>
+                <dt className="eyebrow-muted">{d.label}</dt>
                 <dd
                   className={cx(
                     "mt-1.5 text-[13px] font-medium",

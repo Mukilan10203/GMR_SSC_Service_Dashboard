@@ -76,7 +76,7 @@ function AutomationPageUnlocked() {
           </p>
           <Link
             href="/services"
-            className="mt-5 inline-block rounded-lg bg-rail px-4 py-2.5 text-[13px] font-medium text-white"
+            className="mt-5 inline-block btn-cta px-4 py-2.5 text-[13px] hover:-translate-y-px"
           >
             Back to my services
           </Link>
@@ -208,7 +208,7 @@ function AutomationPageUnlocked() {
                 },
               ].map((t) => (
                 <div key={t.label}>
-                  <p className="eyebrow">{t.label}</p>
+                  <p className="eyebrow-muted">{t.label}</p>
                   <p className="mt-1.5 text-[17px] font-semibold text-ink tnum">{t.value}</p>
                   {t.hint && <p className="mt-0.5 text-[11.5px] text-ink-4">{t.hint}</p>}
                 </div>
@@ -393,7 +393,7 @@ function AutomationPageUnlocked() {
           />
           <div className="mt-5 border-t border-line-soft pt-4">
             <div className="mb-2 flex items-baseline justify-between">
-              <p className="eyebrow">Automation coverage</p>
+              <p className="eyebrow-muted">Automation coverage</p>
               <p className="text-[13px] font-semibold text-ink tnum">
                 {formatPercent(automation.automationCoverage * 100)}
               </p>

@@ -214,7 +214,7 @@ export default function OverviewPage() {
                 },
               ].map((t) => (
                 <div key={t.label}>
-                  <p className="eyebrow">{t.label}</p>
+                  <p className="eyebrow-muted">{t.label}</p>
                   <p className="mt-1.5 text-[17px] font-semibold text-ink tnum">{t.value}</p>
                   <p className="mt-0.5 text-[11.5px] text-ink-4">{t.hint}</p>
                 </div>
@@ -340,14 +340,14 @@ export default function OverviewPage() {
                 { label: "Avg resolution", value: `${counts.avgResolutionDays.toFixed(1)}d`, tone: null },
               ].map((t) => (
                 <div key={t.label} className="rounded-lg border border-line bg-surface-sunken p-3.5">
-                  <p className="eyebrow">{t.label}</p>
+                  <p className="eyebrow-muted">{t.label}</p>
                   <p className="mt-1.5 text-[20px] font-semibold text-ink tnum">{t.value}</p>
                 </div>
               ))}
             </div>
 
             <div className="mt-4 border-t border-line-soft pt-4">
-              <p className="eyebrow mb-3">Most recent comment</p>
+              <p className="eyebrow-muted mb-3">Most recent comment</p>
               {snapshot.feedback[0] ? (
                 <FeedbackCard feedback={snapshot.feedback[0]} />
               ) : (

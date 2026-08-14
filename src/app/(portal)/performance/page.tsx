@@ -412,11 +412,11 @@ function PerformancePageUnlocked() {
             />
             <div className="mt-5 grid grid-cols-2 gap-3 border-t border-line-soft pt-4">
               <div className="rounded-lg border border-line bg-surface-sunken p-3">
-                <p className="eyebrow">Open complaints</p>
+                <p className="eyebrow-muted">Open complaints</p>
                 <p className="mt-1.5 text-[19px] font-semibold text-ink tnum">{exp.openComplaints}</p>
               </div>
               <div className="rounded-lg border border-line bg-surface-sunken p-3">
-                <p className="eyebrow">Escalations</p>
+                <p className="eyebrow-muted">Escalations</p>
                 <p className="mt-1.5 text-[19px] font-semibold text-ink tnum">{exp.escalations}</p>
               </div>
             </div>
