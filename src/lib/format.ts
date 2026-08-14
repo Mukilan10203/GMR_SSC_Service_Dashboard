@@ -47,6 +47,35 @@ export function formatMoneyAxis(n: number): string {
   return `${sign}${inr.format(Math.round(abs))}`;
 }
 
+/* ------------------------------------------------------------------ */
+/* Actual, not forecast                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A year still in progress has no full-year actual — only a projection. The
+ * portal headlines what has genuinely been billed and falls back to the
+ * full-year total once the year has closed, where the two are the same
+ * number anyway. Forecast figures survive only where a chart is explicitly
+ * drawing the projection (faded/dashed months).
+ */
+export function billedTotal(isCurrent: boolean, ytd: number, fullYear: number): number {
+  return isCurrent ? ytd : fullYear;
+}
+
+export function billedTotalLabel(isCurrent: boolean): string {
+  return isCurrent ? "Billed year to date" : "Billed, full year";
+}
+
+/** The same closed months a year earlier — a like-for-like base for YoY. */
+export function priorPeriodToDate(months: { isActual: boolean; prior?: number }[]): number {
+  return months.filter((m) => m.isActual).reduce((a, m) => a + (m.prior ?? 0), 0);
+}
+
+/** Year on year computed from actuals only, never from the projection. */
+export function yoyActualPct(ytd: number, priorToDate: number): number {
+  return priorToDate > 0 ? ((ytd - priorToDate) / priorToDate) * 100 : 0;
+}
+
 export function formatPercent(n: number, decimals = 1): string {
   if (!Number.isFinite(n)) return "—";
   return `${n.toFixed(decimals)}%`;

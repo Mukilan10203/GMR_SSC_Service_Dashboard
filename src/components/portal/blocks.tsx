@@ -11,7 +11,7 @@ import type {
   ServiceDefinition,
   ServiceSnapshot,
 } from "@/lib/domain/types";
-import { cx, formatMetric, formatMoney } from "@/lib/format";
+import { billedTotal, billedTotalLabel, cx, formatMetric, formatMoney } from "@/lib/format";
 import {
   Badge,
   Card,
@@ -429,10 +429,18 @@ export function WelcomeHeader({
           manager {snapshot.entity.relationshipManager}
         </p>
         <p className="text-[12px] text-ink-3 tnum">
-          Full-year SSC fee{" "}
-          <span className="font-semibold text-ink">{formatMoney(snapshot.billing.fyForecast)}</span>{" "}
+          {billedTotalLabel(snapshot.period.isCurrent)}{" "}
+          <span className="font-semibold text-ink">
+            {formatMoney(
+              billedTotal(
+                snapshot.period.isCurrent,
+                snapshot.billing.ytd,
+                snapshot.billing.fyForecast,
+              ),
+            )}
+          </span>{" "}
           <span className="text-ink-4">
-            ({formatMoney(snapshot.billing.ytd)} billed to date)
+            ({snapshot.period.actualMonthCount} months closed to {snapshot.period.asOf})
           </span>
         </p>
       </div>

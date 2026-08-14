@@ -34,7 +34,14 @@ import { BulletGauge } from "@/components/charts";
 import type { Issue, Kpi, ServiceId, ServiceSnapshot } from "@/lib/domain/types";
 import { LOCKED_SERVICE_IDS } from "@/lib/mock/organisation";
 import { getPriorPeriodId, listPeriods } from "@/lib/mock/calendar";
-import { cx, formatMoney, formatNumber, formatPercent } from "@/lib/format";
+import {
+  billedTotal,
+  billedTotalLabel,
+  cx,
+  formatMoney,
+  formatNumber,
+  formatPercent,
+} from "@/lib/format";
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -397,8 +404,14 @@ function ServiceDetail() {
                 )} ${service.billing.ytd >= service.billing.ytdBudget ? "over" : "under"}`}
               />
               <StatTile
-                label="Full-year forecast"
-                value={formatMoney(service.billing.fyForecast)}
+                label={billedTotalLabel(snapshot.period.isCurrent)}
+                value={formatMoney(
+                  billedTotal(
+                    snapshot.period.isCurrent,
+                    service.billing.ytd,
+                    service.billing.fyForecast,
+                  ),
+                )}
                 emphasis
                 caption={`${(service.billing.mix * 100).toFixed(1)}% of total SSC spend`}
               />

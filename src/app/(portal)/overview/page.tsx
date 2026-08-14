@@ -27,18 +27,25 @@ import {
 } from "@/components/charts";
 import { FeedbackCard } from "@/components/portal/issue-blocks";
 import {
+  billedTotal,
+  billedTotalLabel,
   formatMetric,
   formatMoney,
   formatMoneyAxis,
   formatNumber,
   formatPercent,
+  priorPeriodToDate,
+  yoyActualPct,
 } from "@/lib/format";
 
 export default function OverviewPage() {
   const { snapshot, user } = usePortalData();
   if (!snapshot || !user) return null;
 
-  const { billing, sla, cx: exp, services, attention, counts } = snapshot;
+  const { billing, sla, cx: exp, services, attention, counts, period } = snapshot;
+
+  // Year on year from closed months only — the projection is never the headline.
+  const yoy = yoyActualPct(billing.ytd, priorPeriodToDate(billing.monthly));
 
   const criticalCount = counts.criticalIssues;
   const npsTrend = exp.npsQuarters.length >= 2
@@ -63,14 +70,18 @@ export default function OverviewPage() {
         <SectionHeading title="Executive summary" />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <StatTile
-            label="Total SSC billing"
-            value={formatMoney(billing.fyForecast)}
+            label={billedTotalLabel(period.isCurrent)}
+            value={formatMoney(billedTotal(period.isCurrent, billing.ytd, billing.fyForecast))}
             emphasis
-            caption={`${formatMoney(billing.ytd)} billed to date`}
+            caption={
+              period.isCurrent
+                ? `${period.actualMonthCount} months closed · budget ${formatMoney(billing.ytdBudget)}`
+                : `Budget ${formatMoney(billing.fyBudget)}`
+            }
             delta={
               <TrendPill
-                trend={billing.yoyPct > 0.75 ? "up" : billing.yoyPct < -0.75 ? "down" : "flat"}
-                value={billing.yoyPct}
+                trend={yoy > 0.75 ? "up" : yoy < -0.75 ? "down" : "flat"}
+                value={yoy}
                 direction="lower-better"
                 label="YoY"
               />
@@ -226,11 +237,11 @@ export default function OverviewPage() {
             <Card>
               <CardHeader
                 eyebrow="Where the money goes"
-                title="Full-year billing by service"
+                title="Billing by service"
                 action={
-                  <Badge tone={billing.fyVariancePct >= 0 ? "warn" : "good"}>
-                    {billing.fyVariancePct >= 0 ? "+" : "−"}
-                    {Math.abs(billing.fyVariancePct).toFixed(1)}% vs budget
+                  <Badge tone={billing.ytdVariancePct >= 0 ? "warn" : "good"}>
+                    {billing.ytdVariancePct >= 0 ? "+" : "−"}
+                    {Math.abs(billing.ytdVariancePct).toFixed(1)}% vs budget
                   </Badge>
                 }
               />
@@ -238,13 +249,15 @@ export default function OverviewPage() {
                 segments={services.map((s) => ({
                   key: s.service.id,
                   label: s.service.code,
-                  value: s.billing.fyForecast,
+                  value: billedTotal(period.isCurrent, s.billing.ytd, s.billing.fyForecast),
                   color: serviceColor(s.service.id),
                 }))}
                 format={(n) => formatMoney(n)}
                 size={148}
-                centerValue={formatMoney(billing.fyForecast)}
-                centerLabel="Full year"
+                centerValue={formatMoney(
+                  billedTotal(period.isCurrent, billing.ytd, billing.fyForecast),
+                )}
+                centerLabel={period.isCurrent ? "Billed to date" : "Full year"}
               />
             </Card>
 
@@ -368,7 +381,15 @@ export default function OverviewPage() {
             <table className="w-full min-w-[760px] border-collapse text-[13px]">
               <thead>
                 <tr>
-                  {["Service", "Share of spend", "Billing (FY)", "SLA", "Trend", "Open items", "Satisfaction"].map(
+                  {[
+                    "Service",
+                    "Share of spend",
+                    period.isCurrent ? "Billed to date" : "Billed (FY)",
+                    "SLA",
+                    "Trend",
+                    "Open items",
+                    "Satisfaction",
+                  ].map(
                     (h, i) => (
                       <th
                         key={h}
@@ -403,7 +424,9 @@ export default function OverviewPage() {
                         {(s.billing.mix * 100).toFixed(1)}%
                       </td>
                       <td className="border-b border-line-soft px-4 py-3 text-right font-medium tnum">
-                        {formatMoney(s.billing.fyForecast)}
+                        {formatMoney(
+                          billedTotal(period.isCurrent, s.billing.ytd, s.billing.fyForecast),
+                        )}
                       </td>
                       <td className="border-b border-line-soft px-4 py-3 text-right">
                         <StatusPill status={s.sla.status} size="sm">

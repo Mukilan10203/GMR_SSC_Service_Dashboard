@@ -93,13 +93,14 @@ export const IconDownload = ({ size = 18, className }: IconProps) => (
   </svg>
 );
 
-/** The catalogue: a shelf of offerings, one of them highlighted. */
-export const IconCatalogue = ({ size = 18, className }: IconProps) => (
+/** Synergy: separate companies wired to one shared centre. */
+export const IconSynergy = ({ size = 18, className }: IconProps) => (
   <svg {...base(size)} className={className}>
-    <rect x="2.5" y="2.5" width="6" height="6" rx="1.5" />
-    <rect x="11.5" y="2.5" width="6" height="6" rx="1.5" />
-    <rect x="2.5" y="11.5" width="6" height="6" rx="1.5" />
-    <path d="M11.5 14.5h6M14.5 11.5v6" />
+    <circle cx="10" cy="10" r="2.6" />
+    <circle cx="10" cy="3" r="1.7" />
+    <circle cx="16" cy="14" r="1.7" />
+    <circle cx="4" cy="14" r="1.7" />
+    <path d="M10 7.4V4.7M11.9 11.6l2.7 1.6M8.1 11.6l-2.7 1.6" />
   </svg>
 );
 

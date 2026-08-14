@@ -18,13 +18,13 @@ import {
 } from "@/components/ui/primitives";
 import { HBarList } from "@/components/charts";
 import { DATA_SOURCE_MAP } from "@/lib/api";
-import { formatMoney, formatNumber, formatPercent } from "@/lib/format";
+import { billedTotal, billedTotalLabel, formatMoney, formatNumber, formatPercent } from "@/lib/format";
 
 export default function ServicesPage() {
   const { snapshot } = usePortalData();
   if (!snapshot) return null;
 
-  const { services, entity, billing, cx: exp } = snapshot;
+  const { services, entity, billing, cx: exp, period } = snapshot;
   const locked = lockedServicesFor(entity);
 
   return (
@@ -57,7 +57,7 @@ export default function ServicesPage() {
                   <Th>Service</Th>
                   <Th align="right">This month</Th>
                   <Th align="right">Year to date</Th>
-                  <Th align="right">Full year</Th>
+                  <Th align="right">{period.isCurrent ? "Billed to date" : "Full year"}</Th>
                   <Th align="right">Share</Th>
                   <Th align="right">MoM</Th>
                   <Th align="right">vs budget</Th>
@@ -84,7 +84,9 @@ export default function ServicesPage() {
                     <Td align="right">{formatMoney(s.billing.currentTotal)}</Td>
                     <Td align="right">{formatMoney(s.billing.ytd)}</Td>
                     <Td align="right" className="font-medium">
-                      {formatMoney(s.billing.fyForecast)}
+                      {formatMoney(
+                        billedTotal(period.isCurrent, s.billing.ytd, s.billing.fyForecast),
+                      )}
                     </Td>
                     <Td align="right" muted>
                       {(s.billing.mix * 100).toFixed(1)}%
@@ -136,7 +138,7 @@ export default function ServicesPage() {
                     {formatMoney(billing.ytd)}
                   </Td>
                   <Td align="right" className="font-semibold">
-                    {formatMoney(billing.fyForecast)}
+                    {formatMoney(billedTotal(period.isCurrent, billing.ytd, billing.fyForecast))}
                   </Td>
                   <Td align="right" muted>
                     100%
@@ -184,7 +186,7 @@ export default function ServicesPage() {
               sublabel: `${formatNumber(
                 s.activityChart.series.filter((x) => x.isActual).reduce((a, b) => a + b.value, 0),
               )} ${s.activityChart.unit} YTD`,
-              value: s.billing.fyForecast,
+              value: billedTotal(period.isCurrent, s.billing.ytd, s.billing.fyForecast),
               color: serviceColor(s.service.id),
             }))}
             format={(n) => formatMoney(n)}

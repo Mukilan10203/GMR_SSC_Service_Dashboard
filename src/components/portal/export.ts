@@ -1,5 +1,5 @@
 import type { EntitySnapshot } from "@/lib/domain/types";
-import { formatMoney } from "@/lib/format";
+import { billedTotal, billedTotalLabel, formatMoney } from "@/lib/format";
 
 /**
  * Report export. The prototype produces a real CSV from the same snapshot
@@ -24,8 +24,13 @@ export function buildReportCsv(snapshot: EntitySnapshot): string {
 
   push("EXECUTIVE SUMMARY");
   push("Measure", "Value");
-  push("Total SSC billing (full-year forecast)", formatMoney(snapshot.billing.fyForecast));
-  push("Billing year to date", formatMoney(snapshot.billing.ytd));
+  push(
+    billedTotalLabel(snapshot.period.isCurrent),
+    formatMoney(
+      billedTotal(snapshot.period.isCurrent, snapshot.billing.ytd, snapshot.billing.fyForecast),
+    ),
+  );
+  push("Months closed", snapshot.period.actualMonthCount);
   push("Month-on-month change", `${snapshot.billing.momPct.toFixed(1)}%`);
   push("YTD variance vs budget", `${snapshot.billing.ytdVariancePct.toFixed(1)}%`);
   push("Outstanding", formatMoney(snapshot.billing.outstanding));
@@ -38,12 +43,20 @@ export function buildReportCsv(snapshot: EntitySnapshot): string {
   push("");
 
   push("BILLING BY SERVICE");
-  push("Service", "YTD billing", "Full-year forecast", "Share of spend", "MoM change", "SLA", "SLA target");
+  push(
+    "Service",
+    "YTD billing",
+    billedTotalLabel(snapshot.period.isCurrent),
+    "Share of spend",
+    "MoM change",
+    "SLA",
+    "SLA target",
+  );
   for (const s of snapshot.services) {
     push(
       s.service.name,
       formatMoney(s.billing.ytd),
-      formatMoney(s.billing.fyForecast),
+      formatMoney(billedTotal(snapshot.period.isCurrent, s.billing.ytd, s.billing.fyForecast)),
       `${(s.billing.mix * 100).toFixed(1)}%`,
       `${s.billing.momPct.toFixed(1)}%`,
       `${s.sla.overall.toFixed(1)}%`,

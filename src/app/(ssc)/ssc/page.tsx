@@ -102,9 +102,9 @@ export default function SscCommandCentrePage() {
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <StatTile
-          label="Billed year to date"
+          label={estate.isCurrentPeriod ? "Billed year to date" : "Billed, full year"}
           value={formatMoney(t.ytdBilling)}
-          caption={`full-year forecast ${formatMoney(t.fyForecast)}`}
+          caption={`${estate.periodLabel} · ${t.customers} customers`}
         />
         <StatTile
           label="Outstanding"
@@ -211,7 +211,6 @@ export default function SscCommandCentrePage() {
                 <Th align="right">Breached</Th>
                 <Th align="right">CSAT</Th>
                 <Th align="right">Billed YTD</Th>
-                <Th align="right">FY forecast</Th>
                 <Th />
               </tr>
             </thead>
@@ -245,7 +244,6 @@ export default function SscCommandCentrePage() {
                   </Td>
                   <Td align="right">{c.csat.toFixed(1)}</Td>
                   <Td align="right">{formatMoney(c.ytdBilling)}</Td>
-                  <Td align="right">{formatMoney(c.fyForecast)}</Td>
                   <Td align="right">
                     <button
                       type="button"

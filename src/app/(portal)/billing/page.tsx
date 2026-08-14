@@ -18,7 +18,17 @@ import {
   serviceColor,
 } from "@/components/ui/primitives";
 import { DonutChart, HBarList, StackedColumns, TrendChart } from "@/components/charts";
-import { cx, formatMoney, formatMoneyAxis, formatNumber, formatPercent } from "@/lib/format";
+import {
+  billedTotal,
+  billedTotalLabel,
+  cx,
+  formatMoney,
+  formatMoneyAxis,
+  formatNumber,
+  formatPercent,
+  priorPeriodToDate,
+  yoyActualPct,
+} from "@/lib/format";
 
 /** Month-window presets. `from`/`to` are inclusive indices into the fiscal year. */
 function rangePresets(actualCount: number) {
@@ -82,7 +92,17 @@ export default function BillingPage() {
     }))
     .sort((a, b) => b.value - a.value);
 
-  const biggestService = [...services].sort((a, b) => b.billing.fyForecast - a.billing.fyForecast)[0];
+  const biggestService = [...services].sort(
+    (a, b) =>
+      billedTotal(period.isCurrent, b.billing.ytd, b.billing.fyForecast) -
+      billedTotal(period.isCurrent, a.billing.ytd, a.billing.fyForecast),
+  )[0];
+
+  // Like-for-like base: the same closed months a year earlier. Every
+  // comparison on this page is actual against actual, never against a
+  // projection of the months that have not happened yet.
+  const priorToDate = priorPeriodToDate(billing.monthly);
+  const yoy = yoyActualPct(billing.ytd, priorToDate);
   const biggestMover = [...services].sort(
     (a, b) =>
       Math.abs(b.billing.currentTotal - b.billing.prevMonthTotal) -
@@ -173,24 +193,26 @@ export default function BillingPage() {
       <section className="mb-8">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <StatTile
-            label="Full-year forecast"
-            value={formatMoney(billing.fyForecast)}
+            label={period.isCurrent ? "Same months last year" : "Prior year"}
+            value={formatMoney(period.isCurrent ? priorToDate : billing.priorFyTotal)}
             emphasis
-            caption={`Budget ${formatMoney(billing.fyBudget)}`}
+            caption="like-for-like comparison base"
+          />
+          <StatTile
+            label={billedTotalLabel(period.isCurrent)}
+            value={formatMoney(billedTotal(period.isCurrent, billing.ytd, billing.fyForecast))}
+            emphasis
+            caption={`${period.actualMonthCount} months closed · budget ${formatMoney(
+              billing.ytdBudget,
+            )}`}
             delta={
               <TrendPill
-                trend={billing.yoyPct > 0.75 ? "up" : billing.yoyPct < -0.75 ? "down" : "flat"}
-                value={billing.yoyPct}
+                trend={yoy > 0.75 ? "up" : yoy < -0.75 ? "down" : "flat"}
+                value={yoy}
                 direction="lower-better"
                 label="YoY"
               />
             }
-          />
-          <StatTile
-            label="Billed year to date"
-            value={formatMoney(billing.ytd)}
-            emphasis
-            caption={`${period.actualMonthCount} months closed`}
           />
           <StatTile
             label={billing.currentMonthLabel}
@@ -476,11 +498,17 @@ export default function BillingPage() {
             valueLabel="Billed"
           />
           <div className="mt-4 space-y-0 border-t border-line-soft pt-3">
-            <DataRow label={`${period.label} forecast`} value={formatMoney(billing.fyForecast)} />
-            <DataRow label="Prior year actual" value={formatMoney(billing.priorFyTotal)} />
+            <DataRow
+              label={`${period.label} ${period.isCurrent ? "billed to date" : "billed"}`}
+              value={formatMoney(billedTotal(period.isCurrent, billing.ytd, billing.fyForecast))}
+            />
+            <DataRow
+              label={period.isCurrent ? "Same months last year" : "Prior year actual"}
+              value={formatMoney(period.isCurrent ? priorToDate : billing.priorFyTotal)}
+            />
             <DataRow
               label="Year-on-year change"
-              value={`${billing.yoyPct >= 0 ? "+" : "−"}${Math.abs(billing.yoyPct).toFixed(1)}%`}
+              value={`${yoy >= 0 ? "+" : "−"}${Math.abs(yoy).toFixed(1)}%`}
               emphasis
             />
           </div>
@@ -500,7 +528,7 @@ export default function BillingPage() {
                   <Th align="right">YTD</Th>
                   <Th align="right">YTD budget</Th>
                   <Th align="right">Variance</Th>
-                  <Th align="right">Full year</Th>
+                  <Th align="right">{period.isCurrent ? "Billed to date" : "Full year"}</Th>
                   <Th align="right">Share</Th>
                 </tr>
               </thead>
@@ -539,7 +567,9 @@ export default function BillingPage() {
                       </span>
                     </Td>
                     <Td align="right" className="font-medium">
-                      {formatMoney(s.billing.fyForecast)}
+                      {formatMoney(
+                        billedTotal(period.isCurrent, s.billing.ytd, s.billing.fyForecast),
+                      )}
                     </Td>
                     <Td align="right" muted>
                       {(s.billing.mix * 100).toFixed(1)}%
@@ -562,7 +592,7 @@ export default function BillingPage() {
                     {Math.abs(billing.ytdVariancePct).toFixed(1)}%
                   </Td>
                   <Td align="right" className="font-semibold">
-                    {formatMoney(billing.fyForecast)}
+                    {formatMoney(billedTotal(period.isCurrent, billing.ytd, billing.fyForecast))}
                   </Td>
                   <Td align="right" muted>
                     100%
@@ -654,7 +684,7 @@ export default function BillingPage() {
         </Card>
         <p className="mt-3 text-[11.5px] leading-relaxed text-ink-4">
           Total for {billing.currentMonthLabel}: {formatMoney(billing.currentTotal)} —{" "}
-          {formatPercent((billing.modelSplit.txn / billing.fyForecast) * 100)} of your full-year fee is
+          {formatPercent((billing.modelSplit.txn / billing.fyForecast) * 100)} of your SSC fee is
           transaction-based and flexes with volume.
         </p>
       </section>

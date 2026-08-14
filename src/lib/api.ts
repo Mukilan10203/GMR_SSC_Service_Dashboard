@@ -144,15 +144,12 @@ export function getAuthorisedServices(user: PortalUser, entityId: string): Servi
 const snapshotCache = new Map<string, EntitySnapshot>();
 const CACHE_LIMIT = 48;
 
-export function getSnapshot(
-  user: PortalUser,
+function cachedSnapshot(
   entityId: string,
   periodId: string,
+  services: ServiceId[],
   monthIndex?: number | null,
-): EntitySnapshot | null {
-  if (!canAccessEntity(user, entityId)) return null;
-
-  const services = getAuthorisedServices(user, entityId);
+): EntitySnapshot {
   const key = `${entityId}|${periodId}|${services.join(",")}|${monthIndex ?? "latest"}`;
 
   const hit = snapshotCache.get(key);
@@ -165,6 +162,29 @@ export function getSnapshot(
   }
   snapshotCache.set(key, snapshot);
   return snapshot;
+}
+
+export function getSnapshot(
+  user: PortalUser,
+  entityId: string,
+  periodId: string,
+  monthIndex?: number | null,
+): EntitySnapshot | null {
+  if (!canAccessEntity(user, entityId)) return null;
+  return cachedSnapshot(entityId, periodId, getAuthorisedServices(user, entityId), monthIndex);
+}
+
+/**
+ * Every live tower for an entity, regardless of who is asking. Only the
+ * synergy view uses this, and only to read service *outcomes* — never fees,
+ * volumes or contract terms. See `getSynergyView` for where that line sits.
+ */
+function outcomeSnapshot(entityId: string, periodId: string): EntitySnapshot | null {
+  const entity = getEntity(entityId);
+  if (!entity) return null;
+  const services = entity.services.filter((s) => !LOCKED_SERVICE_IDS.includes(s));
+  if (services.length === 0) return null;
+  return cachedSnapshot(entityId, periodId, services);
 }
 
 export function getServiceDetail(
@@ -230,7 +250,8 @@ export function getPortfolio(user: PortalUser, periodId: string): EntityRollup[]
       } satisfies EntityRollup;
     })
     .filter((x): x is EntityRollup => x !== null)
-    .sort((a, b) => b.fyForecast - a.fyForecast);
+    // Ranked on what has actually been billed, not on the projection.
+    .sort((a, b) => b.ytdBilling - a.ytdBilling);
 }
 
 /* ------------------------------------------------------------------ */
@@ -291,6 +312,8 @@ export interface TowerRollup {
 export interface EstateSummary {
   periodLabel: string;
   asOf: string;
+  /** True while the year is still running — no full-year actual exists yet. */
+  isCurrentPeriod: boolean;
   customers: CustomerRollup[];
   towers: TowerRollup[];
   issues: EstateIssue[];
@@ -315,7 +338,7 @@ export interface EstateSummary {
 
 const estateCache = new Map<string, EstateSummary>();
 
-/** Weighted by fee, so the big customers move the estate number more. */
+/** Weighted by billed actuals, so the big customers move the estate number more. */
 const weighted = (rows: { value: number; weight: number }[]): number => {
   const w = rows.reduce((a, r) => a + r.weight, 0);
   if (w <= 0) return 0;
@@ -361,7 +384,7 @@ export function getEstateSummary(
         status: s.sla.status,
       } satisfies CustomerRollup;
     })
-    .sort((a, b) => b.fyForecast - a.fyForecast);
+    .sort((a, b) => b.ytdBilling - a.ytdBilling);
 
   const issues: EstateIssue[] = snapshots
     .flatMap((s) =>
@@ -400,10 +423,10 @@ export function getEstateSummary(
 
       const towerIssues = issues.filter((i) => i.serviceId === def.id && i.status !== "resolved");
       const sla = weighted(
-        rows.map((r) => ({ value: r.service.sla.overall, weight: r.service.billing.fyForecast })),
+        rows.map((r) => ({ value: r.service.sla.overall, weight: r.service.billing.ytd })),
       );
       const target = weighted(
-        rows.map((r) => ({ value: r.service.sla.target, weight: r.service.billing.fyForecast })),
+        rows.map((r) => ({ value: r.service.sla.target, weight: r.service.billing.ytd })),
       );
       // Worst customer for this tower, measured as distance below its own
       // target — targets differ by tower, so raw SLA would not compare.
@@ -433,17 +456,17 @@ export function getEstateSummary(
             value:
               r.snapshot.cx.csatByService.find((c) => c.serviceId === def.id)?.score ??
               r.snapshot.cx.csat,
-            weight: r.service.billing.fyForecast,
+            weight: r.service.billing.ytd,
           })),
         ),
         utilisation: weighted(
-          rows.map((r) => ({ value: r.service.utilisation, weight: r.service.billing.fyForecast })),
+          rows.map((r) => ({ value: r.service.utilisation, weight: r.service.billing.ytd })),
         ),
         weakest,
       };
     })
     .filter((t): t is TowerRollup => t !== null)
-    .sort((a, b) => b.fyForecast - a.fyForecast);
+    .sort((a, b) => b.ytd - a.ytd);
 
   const attention = snapshots
     .flatMap((s) => s.attention.map((a) => ({ ...a, entityName: s.entity.shortName })))
@@ -456,6 +479,7 @@ export function getEstateSummary(
   const summary: EstateSummary = {
     periodLabel: snapshots[0]?.period.label ?? "",
     asOf: snapshots[0]?.period.asOf ?? "",
+    isCurrentPeriod: snapshots[0]?.period.isCurrent ?? false,
     customers,
     towers,
     issues,
@@ -468,9 +492,9 @@ export function getEstateSummary(
       ytdBilling: customers.reduce((a, c) => a + c.ytdBilling, 0),
       fyForecast: customers.reduce((a, c) => a + c.fyForecast, 0),
       outstanding: snapshots.reduce((a, s) => a + s.billing.outstanding, 0),
-      sla: weighted(customers.map((c) => ({ value: c.sla, weight: c.fyForecast }))),
-      slaTarget: weighted(customers.map((c) => ({ value: c.slaTarget, weight: c.fyForecast }))),
-      csat: weighted(customers.map((c) => ({ value: c.csat, weight: c.fyForecast }))),
+      sla: weighted(customers.map((c) => ({ value: c.sla, weight: c.ytdBilling }))),
+      slaTarget: weighted(customers.map((c) => ({ value: c.slaTarget, weight: c.ytdBilling }))),
+      csat: weighted(customers.map((c) => ({ value: c.csat, weight: c.ytdBilling }))),
       openIssues: openIssues.length,
       criticalIssues: openIssues.filter((i) => i.priority === "critical").length,
       breachedIssues: openIssues.filter((i) => i.breached).length,
@@ -558,6 +582,165 @@ export function listOfferings(user: PortalUser, entityId: string, periodId: stri
         : null,
     };
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Synergy — the group's shared view of the catalogue                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One page for the whole group rather than a private catalogue per company.
+ *
+ * This view is PUBLIC — it is served from the landing page, before anyone
+ * signs in, so anybody with the link can read it. The data it exposes is
+ * therefore deliberately narrow.
+ *
+ * WHAT IS SHARED: which towers each GMR company has taken, and non-financial
+ * service outcomes — SLA achieved, satisfaction, issues resolved, effort
+ * released by automation, transactions automated.
+ *
+ * WHAT IS NOT: any monetary figure at all. No fees, rate cards, budgets,
+ * volumes, savings, contract terms or open issues. That line is enforced
+ * here, in the shape of the returned data — there is no currency field for a
+ * page to render even by accident — rather than by a page choosing not to
+ * show one.
+ */
+
+export interface CompanyOutcome {
+  entityId: string;
+  name: string;
+  shortName: string;
+  sector: string;
+  locationName: string;
+  towers: { service: ServiceDefinition; state: OfferingState }[];
+  liveCount: number;
+  slaActual: number;
+  slaTarget: number;
+  slaStatus: Status;
+  csat: number;
+  nps: number;
+  issuesResolved: number;
+  hoursSavedYtd: number;
+  transactionsAutomated: number;
+  automationCoverage: number;
+}
+
+export interface SynergyOffering {
+  service: ServiceDefinition;
+  takenBy: number;
+  total: number;
+  /** Companies live on this tower, best service level first. */
+  users: { shortName: string; sla: number; csat: number; hoursSaved: number }[];
+  groupSla: number;
+  groupCsat: number;
+  groupHoursSaved: number;
+}
+
+export interface SynergyView {
+  periodLabel: string;
+  asOf: string;
+  companies: CompanyOutcome[];
+  offerings: SynergyOffering[];
+  totals: {
+    companies: number;
+    liveSubscriptions: number;
+    hoursSavedYtd: number;
+    transactionsAutomated: number;
+    issuesResolved: number;
+    sla: number;
+    csat: number;
+  };
+}
+
+const mean = (xs: number[]): number =>
+  xs.length === 0 ? 0 : xs.reduce((a, x) => a + x, 0) / xs.length;
+
+export function getSynergyView(periodId: string): SynergyView | null {
+  const locked = new Set(LOCKED_SERVICE_IDS);
+
+  const companies: CompanyOutcome[] = ENTITIES.map((entity) => {
+    const s = outcomeSnapshot(entity.id, periodId);
+    if (!s) return null;
+
+    const contracted = new Set(entity.services);
+    const towers = SERVICES.map((service) => ({
+      service,
+      state: (!contracted.has(service.id)
+        ? "available"
+        : locked.has(service.id)
+          ? "coming-soon"
+          : "live") as OfferingState,
+    }));
+
+    return {
+      entityId: entity.id,
+      name: entity.name,
+      shortName: entity.shortName,
+      sector: entity.sector,
+      locationName: s.location.name,
+      towers,
+      liveCount: towers.filter((t) => t.state === "live").length,
+      slaActual: s.sla.overall,
+      slaTarget: s.sla.target,
+      slaStatus: s.sla.status,
+      csat: s.cx.csat,
+      nps: s.cx.nps,
+      issuesResolved: s.counts.resolvedThisPeriod,
+      hoursSavedYtd: s.automation?.hoursSavedYtd ?? 0,
+      transactionsAutomated: s.automation?.transactionsAutomated ?? 0,
+      automationCoverage: s.automation?.automationCoverage ?? 0,
+    } satisfies CompanyOutcome;
+  }).filter((c): c is CompanyOutcome => c !== null);
+
+  if (companies.length === 0) return null;
+
+  const period = getPeriod(periodId);
+
+  const offerings: SynergyOffering[] = SERVICES.map((service) => {
+    const users = companies
+      .filter((c) => c.towers.find((t) => t.service.id === service.id)?.state === "live")
+      .map((c) => ({
+        shortName: c.shortName,
+        // Tower-level SLA for this company, falling back to its overall.
+        sla:
+          outcomeSnapshot(c.entityId, periodId)?.services.find((x) => x.service.id === service.id)
+            ?.sla.overall ?? c.slaActual,
+        csat: c.csat,
+        hoursSaved: c.hoursSavedYtd,
+      }))
+      .sort((a, b) => b.sla - a.sla);
+
+    const live = companies.filter(
+      (c) => c.towers.find((t) => t.service.id === service.id)?.state === "live",
+    );
+
+    return {
+      service,
+      takenBy: ENTITIES.filter((e) => e.services.includes(service.id)).length,
+      total: ENTITIES.length,
+      users,
+      groupSla: mean(users.map((u) => u.sla)),
+      groupCsat: mean(live.map((c) => c.csat)),
+      groupHoursSaved: live.reduce((a, c) => a + c.hoursSavedYtd, 0),
+    };
+  });
+
+  return {
+    periodLabel: period.label,
+    asOf: period.asOf,
+    // Ranked by what they have released, so the page reads as evidence.
+    companies: [...companies].sort((a, b) => b.hoursSavedYtd - a.hoursSavedYtd),
+    offerings,
+    totals: {
+      companies: companies.length,
+      liveSubscriptions: companies.reduce((a, c) => a + c.liveCount, 0),
+      hoursSavedYtd: companies.reduce((a, c) => a + c.hoursSavedYtd, 0),
+      transactionsAutomated: companies.reduce((a, c) => a + c.transactionsAutomated, 0),
+      issuesResolved: companies.reduce((a, c) => a + c.issuesResolved, 0),
+      sla: mean(companies.map((c) => c.slaActual)),
+      csat: mean(companies.map((c) => c.csat)),
+    },
+  };
 }
 
 /* ------------------------------------------------------------------ */

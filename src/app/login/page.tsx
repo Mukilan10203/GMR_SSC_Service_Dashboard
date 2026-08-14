@@ -117,12 +117,14 @@ export default function LoginPage() {
           }}
         />
 
-        <div className="relative">
-          <PortalMark tone="light" />
-        </div>
+        {/* The mark and the copy are one block, so the paragraph sits
+            directly under the logo rather than drifting to the far edge. */}
+        <div className="relative mx-auto flex w-full max-w-[560px] flex-col pt-8">
+          <div className="flex justify-center">
+            <PortalMark tone="light" size="lg" />
+          </div>
 
-        <div className="relative max-w-[560px]">
-          <h2 className="text-[42px] leading-[1.1] font-bold tracking-[-0.035em] text-white">
+          <h2 className="mt-12 text-[42px] leading-[1.1] font-bold tracking-[-0.035em] text-white">
             Everything your Shared Service Centre does for you, in one place.
           </h2>
 
@@ -136,7 +138,7 @@ export default function LoginPage() {
           </ul>
         </div>
 
-        <p className="relative text-[12px] text-white/55">
+        <p className="relative mx-auto w-full max-w-[560px] text-[12px] text-white/55">
           Prototype build · Illustrative data only · No production system is connected
         </p>
       </aside>
@@ -146,8 +148,8 @@ export default function LoginPage() {
       {/* -------------------------------------------------------- */}
       <section className="flex min-h-dvh flex-col justify-center bg-canvas px-5 py-10 sm:px-10 lg:px-14">
         <div className="mx-auto w-full max-w-[460px]">
-          <div className="mb-8 lg:hidden">
-            <PortalMark tone="dark" />
+          <div className="mb-9 flex justify-center lg:hidden">
+            <PortalMark tone="dark" size="lg" />
           </div>
 
           <h1

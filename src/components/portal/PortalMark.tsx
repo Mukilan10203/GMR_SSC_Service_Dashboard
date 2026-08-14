@@ -42,40 +42,92 @@ function GmrMark({ className }: { className?: string }) {
  * mark keeps its own brand colours always, so on a navy surface it sits in
  * a small white chip rather than being recoloured.
  */
+/**
+ * `md` is the in-app size, sitting in a 68px header or a rail. `lg` is for
+ * places where the mark is the thing being looked at rather than a corner
+ * label — the sign-in panel, chiefly.
+ */
+const SIZES = {
+  md: {
+    row: "gap-2.5",
+    stackGap: "gap-2",
+    chip: "h-9 w-11 rounded-lg px-1.5",
+    chipMark: "h-4",
+    darkMark: "h-7 w-11",
+    divider: "pl-3",
+    name: "text-[14px]",
+    sub: "mt-0.5 text-[8px] tracking-[0.12em]",
+  },
+  lg: {
+    row: "gap-5",
+    stackGap: "gap-4",
+    chip: "h-[74px] w-[104px] rounded-2xl px-4",
+    chipMark: "h-9",
+    darkMark: "h-14 w-[88px]",
+    divider: "pl-5",
+    name: "text-[26px]",
+    sub: "mt-1.5 text-[11px] tracking-[0.16em]",
+  },
+} as const;
+
 export function PortalMark({
   tone = "dark",
   compact = false,
+  size = "md",
+  layout = "row",
   name = "SSC Customer Portal",
   sub = "Shared Service Centre",
 }: {
   tone?: "light" | "dark";
   compact?: boolean;
+  size?: "md" | "lg";
+  /**
+   * `row` puts the name beside the mark behind a rule — the corner-label
+   * lockup. `stacked` puts it underneath and centred, for when the mark is
+   * the focus of the page rather than a label on it.
+   */
+  layout?: "row" | "stacked";
   /** Product name — the delivery console overrides both lines. */
   name?: string;
   sub?: string;
 }) {
   const primary = tone === "light" ? "#ffffff" : "var(--color-navy)";
   const secondary = tone === "light" ? "var(--color-rail-ink-dim)" : "var(--color-ink-3)";
+  const s = SIZES[size];
+  const stacked = layout === "stacked";
 
   return (
-    <div className="flex items-center gap-2.5">
+    <div
+      className={cx(
+        "flex",
+        stacked ? "flex-col items-center text-center" : "items-center",
+        stacked ? s.stackGap : s.row,
+      )}
+    >
       {tone === "light" ? (
-        <span className="flex h-9 w-11 shrink-0 items-center justify-center rounded-lg bg-white px-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.12)]">
-          <GmrMark className="h-4 w-full" />
+        <span
+          className={cx(
+            "flex shrink-0 items-center justify-center bg-white shadow-[0_1px_2px_rgba(0,0,0,0.12)]",
+            s.chip,
+          )}
+        >
+          <GmrMark className={cx("w-full", s.chipMark)} />
         </span>
       ) : (
-        <GmrMark className="h-7 w-11 shrink-0" />
+        <GmrMark className={cx("shrink-0", s.darkMark)} />
       )}
       {!compact && (
-        <div className="border-l border-line pl-3 leading-none">
+        // Stacked drops the vertical rule — a divider under a centred mark
+        // reads as a strikethrough rather than as part of the lockup.
+        <div className={cx("leading-none", stacked ? "" : cx("border-l border-line", s.divider))}>
           <p
-            className={cx("text-[14px] leading-[1.15] font-extrabold tracking-[-0.01em]")}
+            className={cx("leading-[1.15] font-extrabold tracking-[-0.01em]", s.name)}
             style={{ color: primary }}
           >
             {name}
           </p>
           <p
-            className="mt-0.5 text-[8px] font-bold tracking-[0.12em] uppercase"
+            className={cx("font-bold uppercase", s.sub)}
             style={{ color: secondary }}
           >
             {sub}

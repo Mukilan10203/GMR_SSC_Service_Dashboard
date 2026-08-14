@@ -19,6 +19,7 @@ import {
   formatMoneyAxis,
   formatNumber,
   formatPercent,
+  priorPeriodToDate,
 } from "@/lib/format";
 import {
   Badge,
@@ -631,6 +632,10 @@ export function BillingDrivers({ billing, color }: { billing: ServiceBilling; co
 /* ------------------------------------------------------------------ */
 
 export function BillingTrend({ billing, color }: { billing: ServiceBilling; color: string }) {
+  // A month that has not closed means the year is still running, so there is
+  // no full-year actual to show — only a projection.
+  const isCurrent = billing.monthly.some((m) => !m.isActual);
+
   return (
     <Card>
       <CardHeader
@@ -662,9 +667,11 @@ export function BillingTrend({ billing, color }: { billing: ServiceBilling; colo
             hint: `${formatMoney(Math.abs(billing.ytd - billing.ytdBudget))} ${billing.ytd >= billing.ytdBudget ? "over" : "under"}`,
           },
           {
-            label: "Full-year forecast",
-            value: formatMoney(billing.fyForecast),
-            hint: `Budget ${formatMoney(billing.fyBudget)}`,
+            // A year in progress has no full-year actual, so the fourth tile
+            // shows the like-for-like prior-year base instead of a projection.
+            label: isCurrent ? "Same months last year" : "Billed, full year",
+            value: formatMoney(isCurrent ? priorPeriodToDate(billing.monthly) : billing.fyForecast),
+            hint: isCurrent ? "Like-for-like base" : `Budget ${formatMoney(billing.fyBudget)}`,
           },
         ].map((t) => (
           <div key={t.label}>

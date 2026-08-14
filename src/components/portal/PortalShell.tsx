@@ -7,7 +7,7 @@ import { useSession } from "@/state/session";
 import { usePortalData, useUserScope } from "./usePortalData";
 import { PortalMark } from "./PortalMark";
 import { downloadReport } from "./export";
-import { cx, formatMoney } from "@/lib/format";
+import { billedTotal, billedTotalLabel, cx, formatMoney } from "@/lib/format";
 import { lockedServicesFor, SERVICE_MAP } from "@/lib/mock/organisation";
 import { DEMO_AS_OF_LABEL } from "@/lib/mock/calendar";
 import type { EntitySnapshot } from "@/lib/domain/types";
@@ -17,7 +17,6 @@ import {
   IconAutomation,
   IconBell,
   IconBilling,
-  IconCatalogue,
   IconChevron,
   IconChevronDown,
   IconClose,
@@ -40,7 +39,6 @@ import {
 const NAV = [
   { href: "/overview", label: "Overview", Icon: IconOverview },
   { href: "/services", label: "Services", Icon: IconServices, expandable: true },
-  { href: "/offerings", label: "Offerings", Icon: IconCatalogue },
   { href: "/billing", label: "Billing", Icon: IconBilling },
   { href: "/issues", label: "Issues & Feedback", Icon: IconIssues },
 ] as const;
@@ -838,8 +836,15 @@ export function PortalShell({ children }: { children: ReactNode }) {
             </p>
             {snapshot && (
               <p className="tnum">
-                {snapshot.entity.name} · {snapshot.period.label} · data as at {snapshot.period.asOf} ·
-                full-year SSC fee {formatMoney(snapshot.billing.fyForecast)}
+                {snapshot.entity.name} · {snapshot.period.label} · data as at {snapshot.period.asOf} ·{" "}
+                {billedTotalLabel(snapshot.period.isCurrent).toLowerCase()}{" "}
+                {formatMoney(
+                  billedTotal(
+                    snapshot.period.isCurrent,
+                    snapshot.billing.ytd,
+                    snapshot.billing.fyForecast,
+                  ),
+                )}
               </p>
             )}
           </div>
