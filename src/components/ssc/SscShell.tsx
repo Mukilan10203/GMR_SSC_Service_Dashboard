@@ -10,6 +10,7 @@ import { PortalMark } from "@/components/portal/PortalMark";
 import { Select } from "@/components/portal/PortalShell";
 import { cx } from "@/lib/format";
 import {
+  IconCustomers,
   IconExternal,
   IconIssues,
   IconLogout,
@@ -30,6 +31,7 @@ import {
 const NAV = [
   { href: "/ssc", label: "Command centre", Icon: IconOverview },
   { href: "/ssc/issues", label: "Issue queue", Icon: IconIssues },
+  { href: "/ssc/customers", label: "Customers & adoption", Icon: IconCustomers },
 ];
 
 /**

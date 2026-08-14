@@ -17,6 +17,7 @@ import {
   IconAutomation,
   IconBell,
   IconBilling,
+  IconCatalogue,
   IconChevron,
   IconChevronDown,
   IconClose,
@@ -39,6 +40,7 @@ import {
 const NAV = [
   { href: "/overview", label: "Overview", Icon: IconOverview },
   { href: "/services", label: "Services", Icon: IconServices, expandable: true },
+  { href: "/offerings", label: "Offerings", Icon: IconCatalogue },
   { href: "/billing", label: "Billing", Icon: IconBilling },
   { href: "/issues", label: "Issues & Feedback", Icon: IconIssues },
 ] as const;

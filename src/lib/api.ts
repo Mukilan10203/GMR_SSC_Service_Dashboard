@@ -487,6 +487,159 @@ export function getEstateSummary(
 }
 
 /* ------------------------------------------------------------------ */
+/* Offerings — the catalogue, and who has taken what                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Where one service sits for one entity:
+ *  live        — contracted, and switched on in this build
+ *  coming-soon — contracted, but not yet released in this build
+ *  available   — not contracted; this is the offer
+ */
+export type OfferingState = "live" | "coming-soon" | "available";
+
+export interface Offering {
+  service: ServiceDefinition;
+  state: OfferingState;
+  /** How many entities across the group already contract this tower. */
+  adoption: { taken: number; total: number };
+  /** What the customer gets, stated from the catalogue rather than invented. */
+  delivers: string[];
+  /** Present only when the tower is live for this entity. */
+  live: {
+    slaActual: number;
+    slaTarget: number;
+    status: Status;
+    ytdSpend: number;
+    kpiCount: number;
+    subServiceCount: number;
+  } | null;
+}
+
+export function listOfferings(user: PortalUser, entityId: string, periodId: string): Offering[] {
+  const entity = getEntity(entityId);
+  if (!entity) return [];
+
+  const snapshot = getSnapshot(user, entityId, periodId);
+  const contracted = new Set(entity.services);
+  const locked = new Set(LOCKED_SERVICE_IDS);
+  const withheld = new Set(user.restrictedServices ?? []);
+
+  return SERVICES.map((service) => {
+    const state: OfferingState = !contracted.has(service.id)
+      ? "available"
+      : locked.has(service.id) || withheld.has(service.id)
+        ? "coming-soon"
+        : "live";
+
+    const taken = ENTITIES.filter((e) => e.services.includes(service.id)).length;
+    const live = snapshot?.services.find((s) => s.service.id === service.id) ?? null;
+
+    return {
+      service,
+      state,
+      adoption: { taken, total: ENTITIES.length },
+      delivers: [
+        `${service.subServices.length} sub-services: ${service.subServices
+          .map((s) => s.name)
+          .join(", ")}`,
+        `Service level committed at ${service.slaTarget}%`,
+        `Delivered from ${service.sourceSystems.join(", ")}`,
+      ],
+      live: live
+        ? {
+            slaActual: live.sla.overall,
+            slaTarget: live.sla.target,
+            status: live.sla.status,
+            ytdSpend: live.billing.ytd,
+            kpiCount: live.kpis.length,
+            subServiceCount: live.subServices.length,
+          }
+        : null,
+    };
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Adoption — which customer took which offering, and what it returned */
+/* ------------------------------------------------------------------ */
+
+export interface CustomerAdoption {
+  entity: Entity;
+  location: Location;
+  towers: { service: ServiceDefinition; state: OfferingState }[];
+  liveCount: number;
+  contractedCount: number;
+  /** What the customer got back for it. All measured, none asserted. */
+  benefits: {
+    billedYtd: number;
+    slaActual: number;
+    slaTarget: number;
+    slaStatus: Status;
+    csat: number;
+    nps: number;
+    issuesResolved: number;
+    avgResolutionDays: number;
+    hoursSavedYtd: number;
+    costSavingYtd: number;
+    transactionsAutomated: number;
+    automationRoi: number;
+    automationCoverage: number;
+    analyticsValue: number;
+  };
+}
+
+export function getAdoption(
+  user: PortalUser,
+  periodId: string,
+  monthIndex?: number | null,
+): CustomerAdoption[] {
+  if (!isProvider(user)) return [];
+  const locked = new Set(LOCKED_SERVICE_IDS);
+
+  return ENTITIES.map((entity) => {
+    const s = getSnapshot(user, entity.id, periodId, monthIndex);
+    if (!s) return null;
+
+    const contracted = new Set(entity.services);
+    const towers = SERVICES.map((service) => ({
+      service,
+      state: (!contracted.has(service.id)
+        ? "available"
+        : locked.has(service.id)
+          ? "coming-soon"
+          : "live") as OfferingState,
+    }));
+
+    return {
+      entity,
+      location: s.location,
+      towers,
+      liveCount: towers.filter((t) => t.state === "live").length,
+      contractedCount: entity.services.length,
+      benefits: {
+        billedYtd: s.billing.ytd,
+        slaActual: s.sla.overall,
+        slaTarget: s.sla.target,
+        slaStatus: s.sla.status,
+        csat: s.cx.csat,
+        nps: s.cx.nps,
+        issuesResolved: s.counts.resolvedThisPeriod,
+        avgResolutionDays: s.counts.avgResolutionDays,
+        hoursSavedYtd: s.automation?.hoursSavedYtd ?? 0,
+        costSavingYtd: s.automation?.costSavingYtd ?? 0,
+        transactionsAutomated: s.automation?.transactionsAutomated ?? 0,
+        automationRoi: s.automation?.roi ?? 0,
+        automationCoverage: s.automation?.automationCoverage ?? 0,
+        analyticsValue: s.analytics?.valueIdentified ?? 0,
+      },
+    } satisfies CustomerAdoption;
+  })
+    .filter((r): r is CustomerAdoption => r !== null)
+    .sort((a, b) => b.benefits.billedYtd - a.benefits.billedYtd);
+}
+
+/* ------------------------------------------------------------------ */
 /* Reference data                                                      */
 /* ------------------------------------------------------------------ */
 

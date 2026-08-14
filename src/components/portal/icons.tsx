@@ -93,6 +93,25 @@ export const IconDownload = ({ size = 18, className }: IconProps) => (
   </svg>
 );
 
+/** The catalogue: a shelf of offerings, one of them highlighted. */
+export const IconCatalogue = ({ size = 18, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <rect x="2.5" y="2.5" width="6" height="6" rx="1.5" />
+    <rect x="11.5" y="2.5" width="6" height="6" rx="1.5" />
+    <rect x="2.5" y="11.5" width="6" height="6" rx="1.5" />
+    <path d="M11.5 14.5h6M14.5 11.5v6" />
+  </svg>
+);
+
+/** Customers: a group of people the SSC delivers to. */
+export const IconCustomers = ({ size = 18, className }: IconProps) => (
+  <svg {...base(size)} className={className}>
+    <circle cx="7.5" cy="6.5" r="2.8" />
+    <path d="M2.5 16.5c0-2.6 2.2-4.4 5-4.4s5 1.8 5 4.4" />
+    <path d="M13.5 4.3a2.8 2.8 0 0 1 0 5.4M14.8 12.4c1.7.6 2.7 2.1 2.7 4.1" />
+  </svg>
+);
+
 export const IconChevron = ({ size = 16, className }: IconProps) => (
   <svg {...base(size)} className={className}>
     <path d="m7.5 4.5 5 5.5-5 5.5" />

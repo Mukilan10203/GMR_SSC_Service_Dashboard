@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -33,9 +34,13 @@ interface SessionValue {
   periodId: string;
   /** Fiscal month being viewed, or null for "the latest closed month". */
   monthIndex: number | null;
-  /** False until localStorage has been read — avoids a hydration flash. */
+  /** False until stored session has been read — avoids a hydration flash. */
   ready: boolean;
-  login: (email: string, password: string) => { ok: boolean; error?: string };
+  login: (
+    email: string,
+    password: string,
+    opts?: { remember?: boolean },
+  ) => { ok: boolean; error?: string };
   logout: () => void;
   setEntity: (entityId: string) => void;
   setPeriod: (periodId: string) => void;
@@ -50,10 +55,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [periodId, setPeriodId] = useState("");
   const [monthIndex, setMonthIndex] = useState<number | null>(null);
   const [ready, setReady] = useState(false);
+  /**
+   * "Keep me signed in" decides which store the session lives in:
+   * localStorage survives closing the browser, sessionStorage does not.
+   * Held in a ref because every later write (entity, period) must land in
+   * the same store the sign-in chose.
+   */
+  const rememberRef = useRef(true);
 
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
+      const remembered = window.localStorage.getItem(STORAGE_KEY);
+      const raw = remembered ?? window.sessionStorage.getItem(STORAGE_KEY);
+      rememberRef.current = remembered !== null;
       if (raw) {
         const parsed = JSON.parse(raw) as PersistedSession;
         const restored = findUserById(parsed.userId);
@@ -78,18 +92,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const persist = useCallback((next: PersistedSession | null) => {
     try {
-      if (next) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      else window.localStorage.removeItem(STORAGE_KEY);
+      // Always clear both, so a session never lingers in the other store.
+      window.localStorage.removeItem(STORAGE_KEY);
+      window.sessionStorage.removeItem(STORAGE_KEY);
+      if (next) {
+        const store = rememberRef.current ? window.localStorage : window.sessionStorage;
+        store.setItem(STORAGE_KEY, JSON.stringify(next));
+      }
     } catch {
       // Storage being unavailable must not break the session.
     }
   }, []);
 
   const login = useCallback(
-    (email: string, password: string) => {
+    (email: string, password: string, opts?: { remember?: boolean }) => {
       const result = authenticate(email, password);
       if (!result.ok) return { ok: false as const, error: result.error };
 
+      rememberRef.current = opts?.remember ?? true;
       const scope = getUserScope(result.user);
       setUser(result.user);
       setEntityId(scope.defaultEntityId);
