@@ -200,6 +200,35 @@ export const PRIORITY_TONE = {
   low: "neutral",
 } as const;
 
+/** Toggle used by the issue filters on both the customer and SSC sides. */
+export function FilterChip({
+  active,
+  onClick,
+  children,
+  dot,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  dot?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cx(
+        "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] font-medium capitalize transition-colors",
+        active
+          ? "border-accent-line bg-accent-soft text-accent-strong"
+          : "border-line bg-surface text-ink-3 hover:border-line-strong hover:text-ink-2",
+      )}
+    >
+      {dot && <span className="size-1.5 rounded-full" style={{ background: dot }} />}
+      {children}
+    </button>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Metric tiles                                                        */
 /* ------------------------------------------------------------------ */

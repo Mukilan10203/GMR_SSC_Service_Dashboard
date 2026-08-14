@@ -45,9 +45,14 @@ function GmrMark({ className }: { className?: string }) {
 export function PortalMark({
   tone = "dark",
   compact = false,
+  name = "SSC Customer Portal",
+  sub = "Shared Service Centre",
 }: {
   tone?: "light" | "dark";
   compact?: boolean;
+  /** Product name — the delivery console overrides both lines. */
+  name?: string;
+  sub?: string;
 }) {
   const primary = tone === "light" ? "#ffffff" : "var(--color-navy)";
   const secondary = tone === "light" ? "var(--color-rail-ink-dim)" : "var(--color-ink-3)";
@@ -67,13 +72,13 @@ export function PortalMark({
             className={cx("text-[14px] leading-[1.15] font-extrabold tracking-[-0.01em]")}
             style={{ color: primary }}
           >
-            SSC Customer Portal
+            {name}
           </p>
           <p
             className="mt-0.5 text-[8px] font-bold tracking-[0.12em] uppercase"
             style={{ color: secondary }}
           >
-            Shared Service Centre
+            {sub}
           </p>
         </div>
       )}

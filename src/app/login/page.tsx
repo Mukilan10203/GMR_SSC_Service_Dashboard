@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/state/session";
 import { demoPassword, listDemoUsers } from "@/lib/api";
+import type { PortalUser } from "@/lib/domain/types";
 import { ENTITIES, LOCATIONS, SERVICE_MAP } from "@/lib/mock/organisation";
 import { PortalMark } from "@/components/portal/PortalMark";
 
@@ -37,28 +38,37 @@ function scopeLabel(entityIds: string[]): string {
 }
 
 export default function LoginPage() {
-  const { login, user, ready } = useSession();
+  const { login, logout, ready } = useSession();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const cleared = useRef(false);
 
+  // Landing on sign-in means "let me choose a workspace" — so a session left
+  // over in localStorage is dropped rather than restored. Without this the
+  // page bounced straight to /overview before anything was clicked.
   useEffect(() => {
-    if (ready && user) router.replace("/overview");
-  }, [ready, user, router]);
+    if (!ready || cleared.current) return;
+    cleared.current = true;
+    logout();
+  }, [ready, logout]);
 
-  const signIn = (email: string) => {
+  /** SSC staff land in the delivery console; customers land in their portal. */
+  const signIn = (user: PortalUser) => {
     setError(null);
-    setBusy(email);
-    const result = login(email, demoPassword);
+    setBusy(user.email);
+    const result = login(user.email, demoPassword);
     if (!result.ok) {
       setError(result.error ?? "Unable to sign in.");
       setBusy(null);
       return;
     }
-    router.replace("/overview");
+    router.replace(user.kind === "ssc" ? "/ssc" : "/overview");
   };
 
-  const users = listDemoUsers();
+  const allUsers = listDemoUsers();
+  const users = allUsers.filter((u) => u.kind !== "ssc");
+  const sscUsers = allUsers.filter((u) => u.kind === "ssc");
 
   return (
     <main
@@ -127,7 +137,7 @@ export default function LoginPage() {
                   key={u.id}
                   type="button"
                   disabled={busy !== null}
-                  onClick={() => signIn(u.email)}
+                  onClick={() => signIn(u)}
                   className="group rounded-[13px] border border-line bg-surface p-[18px] text-left transition-all hover:-translate-y-0.5 hover:border-accent hover:bg-accent-soft disabled:opacity-60"
                 >
                   <span className="text-[23px] leading-none" aria-hidden>
@@ -156,6 +166,44 @@ export default function LoginPage() {
               );
             })}
           </div>
+
+          {/* The other side of the contract — the delivery organisation. */}
+          {sscUsers.length > 0 && (
+            <div className="mt-6 border-t border-line pt-5">
+              <p className="eyebrow mb-1">Shared Service Centre</p>
+              <p className="mb-3 text-[12.5px] leading-relaxed text-ink-3">
+                The SSC signs in to the delivery console: every customer, every live tower, and one
+                queue holding every open issue in the estate.
+              </p>
+              <div className="grid gap-2.5">
+                {sscUsers.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => signIn(u)}
+                    className="group rounded-[13px] border border-accent-line bg-accent-soft/40 p-[18px] text-left transition-all hover:-translate-y-0.5 hover:border-accent hover:bg-accent-soft disabled:opacity-60"
+                  >
+                    <span className="text-[23px] leading-none" aria-hidden>
+                      ◫
+                    </span>
+                    <b
+                      className="mt-2.5 block text-[16px] font-semibold"
+                      style={{ color: "var(--color-navy)" }}
+                    >
+                      {u.role}
+                    </b>
+                    <span className="mt-1 block text-[11.5px] leading-relaxed text-ink-3">
+                      {u.name} · {u.demoNote}
+                    </span>
+                    <span className="mt-3 block text-[11px] font-semibold text-accent">
+                      {busy === u.email ? "Signing in…" : "Enter delivery console →"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {error && (
             <p

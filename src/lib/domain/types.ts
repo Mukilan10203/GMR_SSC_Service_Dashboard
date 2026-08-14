@@ -56,6 +56,12 @@ export interface PortalUser {
   role: string;
   title: string;
   initials: string;
+  /**
+   * Which side of the contract this account sits on. `customer` (the
+   * default) sees one entity at a time — its own. `ssc` is the delivery
+   * organisation: it sees every customer at once, through the console.
+   */
+  kind?: "customer" | "ssc";
   /** Entities this user is authorised to see. First one is the default. */
   entityIds: string[];
   /** Services withheld from this user even if the entity consumes them. */

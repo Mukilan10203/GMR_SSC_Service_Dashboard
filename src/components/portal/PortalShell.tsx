@@ -30,7 +30,6 @@ import {
   IconPortfolio,
   IconSearch,
   IconServices,
-  IconSidebar,
 } from "./icons";
 
 /* ------------------------------------------------------------------ */
@@ -75,7 +74,8 @@ function useDismiss(open: boolean, close: () => void) {
   return ref;
 }
 
-function Select({
+/** Shared by the customer header and the SSC console header. */
+export function Select({
   label,
   value,
   options,
@@ -93,16 +93,19 @@ function Select({
   const current = options.find((o) => o.id === value);
 
   return (
-    <div ref={ref} className="relative">
+    // `min-w-0` + a width (rather than a min-width) lets the control shrink and
+    // truncate its value so the header stays on one line at any desktop size.
+    <div ref={ref} className="relative min-w-0 shrink" style={{ width: minWidth }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex h-9 w-full items-center gap-2 rounded-lg border border-line bg-surface px-3 text-left transition-colors hover:border-line-strong"
-        style={{ minWidth }}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span className="text-[11px] font-medium tracking-wide text-ink-4 uppercase">{label}</span>
+        <span className="shrink-0 text-[11px] font-medium tracking-wide text-ink-4 uppercase">
+          {label}
+        </span>
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
           {current?.label ?? "—"}
         </span>
@@ -166,7 +169,7 @@ function ScopeControls() {
   const multiEntity = scope.entities.length > 1;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex min-w-0 flex-wrap items-center gap-2 lg:flex-nowrap">
       {multiEntity && (
         <Select
           label="Location"
@@ -755,8 +758,25 @@ export function PortalShell({ children }: { children: ReactNode }) {
       )}
     >
       {/* Desktop rail */}
-      <aside className="sticky top-0 hidden h-dvh lg:block">
+      <aside className="sticky top-0 z-40 hidden h-dvh lg:block">
         <Sidebar collapsed={collapsed} />
+
+        {/* Rail handle — a pill straddling the rail edge, the way the
+            reference design shows it. Points right to open, left to close. */}
+        <button
+          type="button"
+          onClick={toggleRail}
+          className="absolute top-1/2 right-0 z-50 flex size-11 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full bg-accent text-white ring-4 ring-surface transition-all hover:bg-accent-strong hover:ring-accent-soft"
+          style={{ boxShadow: "0 10px 26px rgba(6,63,145,.34)" }}
+          aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+          aria-pressed={collapsed}
+          title={collapsed ? "Expand navigation" : "Collapse navigation"}
+        >
+          <IconChevron
+            size={19}
+            className={cx("transition-transform duration-200", !collapsed && "rotate-180")}
+          />
+        </button>
       </aside>
 
       {/* Mobile drawer */}
@@ -771,18 +791,9 @@ export function PortalShell({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-col">
         <header className="sticky top-0 z-40 border-b border-line bg-surface">
-          <div className="flex min-h-[68px] flex-wrap items-center gap-3 px-5 py-3 xl:px-6">
-            <button
-              type="button"
-              onClick={toggleRail}
-              className="hidden size-9 items-center justify-center rounded-lg border border-line bg-surface text-ink-2 transition-colors hover:border-line-strong hover:text-ink lg:flex"
-              aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-              aria-pressed={collapsed}
-              title={collapsed ? "Expand navigation" : "Collapse navigation"}
-            >
-              <IconSidebar size={17} />
-            </button>
-
+          {/* One row from lg up — the scope selects absorb the shrink, the
+              action cluster keeps its size. Below lg it still wraps. */}
+          <div className="flex min-h-[68px] flex-wrap items-center gap-3 px-5 py-3 lg:flex-nowrap xl:px-6">
             <button
               type="button"
               onClick={() => setDrawer(true)}
@@ -794,7 +805,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
 
             <ScopeControls />
 
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex shrink-0 items-center gap-2">
               <button
                 type="button"
                 onClick={() => {

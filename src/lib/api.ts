@@ -1,12 +1,16 @@
 import type {
+  AttentionItem,
   Entity,
   EntitySnapshot,
+  Feedback,
   Issue,
   Location,
   Period,
   PortalUser,
+  ServiceDefinition,
   ServiceId,
   ServiceSnapshot,
+  Status,
 } from "./domain/types";
 import { buildEntitySnapshot } from "./mock/engine";
 import { getPeriod, listPeriods } from "./mock/calendar";
@@ -17,9 +21,12 @@ import {
   getEntity,
   getUserByEmail,
   LOCATIONS,
+  LOCKED_SERVICE_IDS,
+  SERVICE_MAP,
   SERVICES,
   USERS,
 } from "./mock/organisation";
+import { gradeAgainstTarget } from "./format";
 
 /**
  * ─────────────────────────────────────────────────────────────────────
@@ -99,7 +106,23 @@ export function getUserScope(user: PortalUser): UserScope {
   };
 }
 
+/** True for accounts belonging to the SSC itself rather than to a customer. */
+export const isProvider = (user: PortalUser): boolean => user.kind === "ssc";
+
+/**
+ * The towers an SSC account is responsible for. The SSC head — the only SSC
+ * account today — sees every live tower. A narrower SSC role would be
+ * limited with `restrictedServices`, the same mechanism that narrows a
+ * service-scoped customer account, and this function already honours it.
+ */
+export function providerTowers(user: PortalUser): ServiceDefinition[] {
+  const blocked = new Set([...(user.restrictedServices ?? []), ...LOCKED_SERVICE_IDS]);
+  return SERVICES.filter((s) => !blocked.has(s.id));
+}
+
 export function canAccessEntity(user: PortalUser, entityId: string): boolean {
+  // The SSC delivers to every entity, so it may read every entity.
+  if (isProvider(user)) return true;
   return user.entityIds.includes(entityId);
 }
 
@@ -208,6 +231,259 @@ export function getPortfolio(user: PortalUser, periodId: string): EntityRollup[]
     })
     .filter((x): x is EntityRollup => x !== null)
     .sort((a, b) => b.fyForecast - a.fyForecast);
+}
+
+/* ------------------------------------------------------------------ */
+/* The estate — the SSC's own view of every customer at once           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The customer portal reads one entity across many towers. The delivery
+ * console reads the same records the other way round: one tower across many
+ * customers, and one queue holding every open issue in the estate.
+ *
+ * Nothing new is generated here. Each customer's snapshot is built by the
+ * same engine and served from the same cache the customer portal uses — this
+ * layer only re-pivots and aggregates. Tower scope is honoured, so an F&A
+ * tower lead's estate contains F&A and nothing else.
+ */
+
+export interface EstateIssue extends Issue {
+  entityName: string;
+  entityShortName: string;
+  locationName: string;
+  serviceCode: string;
+  /** Still open, and already past its agreed resolution target. */
+  breached: boolean;
+}
+
+export interface EstateFeedback extends Feedback {
+  entityName: string;
+  serviceCode: string;
+}
+
+/** One customer, as the SSC sees it: delivery health plus the account owner. */
+export interface CustomerRollup extends EntityRollup {
+  relationshipManager: string;
+  breachedIssues: number;
+  unansweredFeedback: number;
+  status: Status;
+}
+
+/** One tower, across every customer it is delivered to. */
+export interface TowerRollup {
+  service: ServiceDefinition;
+  customerCount: number;
+  sla: number;
+  target: number;
+  status: Status;
+  ytd: number;
+  fyForecast: number;
+  openIssues: number;
+  criticalIssues: number;
+  breachedIssues: number;
+  csat: number;
+  utilisation: number;
+  /** The customer this tower is currently serving worst. */
+  weakest: { name: string; sla: number } | null;
+}
+
+export interface EstateSummary {
+  periodLabel: string;
+  asOf: string;
+  customers: CustomerRollup[];
+  towers: TowerRollup[];
+  issues: EstateIssue[];
+  feedback: EstateFeedback[];
+  attention: (AttentionItem & { entityName: string })[];
+  totals: {
+    customers: number;
+    customersOffTarget: number;
+    towers: number;
+    ytdBilling: number;
+    fyForecast: number;
+    outstanding: number;
+    sla: number;
+    slaTarget: number;
+    csat: number;
+    openIssues: number;
+    criticalIssues: number;
+    breachedIssues: number;
+    unansweredFeedback: number;
+  };
+}
+
+const estateCache = new Map<string, EstateSummary>();
+
+/** Weighted by fee, so the big customers move the estate number more. */
+const weighted = (rows: { value: number; weight: number }[]): number => {
+  const w = rows.reduce((a, r) => a + r.weight, 0);
+  if (w <= 0) return 0;
+  return rows.reduce((a, r) => a + r.value * r.weight, 0) / w;
+};
+
+export function getEstateSummary(
+  user: PortalUser,
+  periodId: string,
+  monthIndex?: number | null,
+): EstateSummary | null {
+  if (!isProvider(user)) return null;
+
+  const key = `${user.id}|${periodId}|${monthIndex ?? "latest"}`;
+  const hit = estateCache.get(key);
+  if (hit) return hit;
+
+  const snapshots = ENTITIES.map((e) => getSnapshot(user, e.id, periodId, monthIndex)).filter(
+    (s): s is EntitySnapshot => s !== null && s.services.length > 0,
+  );
+
+  const customers: CustomerRollup[] = snapshots
+    .map((s) => {
+      const breachedIssues = s.issues.filter(
+        (i) => i.status !== "resolved" && i.agingDays > i.slaTargetDays,
+      ).length;
+      return {
+        entity: s.entity,
+        location: s.location,
+        ytdBilling: s.billing.ytd,
+        fyForecast: s.billing.fyForecast,
+        sla: s.sla.overall,
+        slaTarget: s.sla.target,
+        csat: s.cx.csat,
+        nps: s.cx.nps,
+        openIssues: s.counts.openIssues,
+        criticalIssues: s.counts.criticalIssues,
+        serviceCount: s.services.length,
+        momPct: s.billing.momPct,
+        relationshipManager: s.entity.relationshipManager,
+        breachedIssues,
+        unansweredFeedback: s.feedback.filter((f) => !f.responded).length,
+        status: s.sla.status,
+      } satisfies CustomerRollup;
+    })
+    .sort((a, b) => b.fyForecast - a.fyForecast);
+
+  const issues: EstateIssue[] = snapshots
+    .flatMap((s) =>
+      s.issues.map((i) => ({
+        ...i,
+        entityName: s.entity.name,
+        entityShortName: s.entity.shortName,
+        locationName: s.location.name,
+        serviceCode: SERVICE_MAP[i.serviceId].code,
+        breached: i.status !== "resolved" && i.agingDays > i.slaTargetDays,
+      })),
+    )
+    // Worst first: breached before on-track, then oldest relative to target.
+    .sort((a, b) => {
+      if (a.breached !== b.breached) return a.breached ? -1 : 1;
+      return b.agingDays - b.slaTargetDays - (a.agingDays - a.slaTargetDays);
+    });
+
+  const feedback: EstateFeedback[] = snapshots
+    .flatMap((s) =>
+      s.feedback.map((f) => ({
+        ...f,
+        entityName: s.entity.name,
+        serviceCode: SERVICE_MAP[f.serviceId].code,
+      })),
+    )
+    .sort((a, b) => Number(a.responded) - Number(b.responded));
+
+  const towers: TowerRollup[] = providerTowers(user)
+    .map((def): TowerRollup | null => {
+      const rows = snapshots
+        .map((s) => ({ snapshot: s, service: s.services.find((x) => x.service.id === def.id) }))
+        .filter((r): r is { snapshot: EntitySnapshot; service: ServiceSnapshot } => !!r.service);
+
+      if (rows.length === 0) return null;
+
+      const towerIssues = issues.filter((i) => i.serviceId === def.id && i.status !== "resolved");
+      const sla = weighted(
+        rows.map((r) => ({ value: r.service.sla.overall, weight: r.service.billing.fyForecast })),
+      );
+      const target = weighted(
+        rows.map((r) => ({ value: r.service.sla.target, weight: r.service.billing.fyForecast })),
+      );
+      // Worst customer for this tower, measured as distance below its own
+      // target — targets differ by tower, so raw SLA would not compare.
+      const weakest =
+        rows
+          .map((r) => ({
+            name: r.snapshot.entity.shortName,
+            sla: r.service.sla.overall,
+            gap: r.service.sla.overall - r.service.sla.target,
+          }))
+          .sort((a, b) => a.gap - b.gap)
+          .map(({ name, sla }) => ({ name, sla }))[0] ?? null;
+
+      return {
+        service: def,
+        customerCount: rows.length,
+        sla,
+        target,
+        status: gradeAgainstTarget(sla, target, "higher-better", 0.03),
+        ytd: rows.reduce((a, r) => a + r.service.billing.ytd, 0),
+        fyForecast: rows.reduce((a, r) => a + r.service.billing.fyForecast, 0),
+        openIssues: towerIssues.length,
+        criticalIssues: towerIssues.filter((i) => i.priority === "critical").length,
+        breachedIssues: towerIssues.filter((i) => i.breached).length,
+        csat: weighted(
+          rows.map((r) => ({
+            value:
+              r.snapshot.cx.csatByService.find((c) => c.serviceId === def.id)?.score ??
+              r.snapshot.cx.csat,
+            weight: r.service.billing.fyForecast,
+          })),
+        ),
+        utilisation: weighted(
+          rows.map((r) => ({ value: r.service.utilisation, weight: r.service.billing.fyForecast })),
+        ),
+        weakest,
+      };
+    })
+    .filter((t): t is TowerRollup => t !== null)
+    .sort((a, b) => b.fyForecast - a.fyForecast);
+
+  const attention = snapshots
+    .flatMap((s) => s.attention.map((a) => ({ ...a, entityName: s.entity.shortName })))
+    .sort((a, b) => {
+      const rank = { critical: 0, warning: 1, info: 2 };
+      return rank[a.severity] - rank[b.severity];
+    });
+
+  const openIssues = issues.filter((i) => i.status !== "resolved");
+  const summary: EstateSummary = {
+    periodLabel: snapshots[0]?.period.label ?? "",
+    asOf: snapshots[0]?.period.asOf ?? "",
+    customers,
+    towers,
+    issues,
+    feedback,
+    attention,
+    totals: {
+      customers: customers.length,
+      customersOffTarget: customers.filter((c) => c.status !== "good").length,
+      towers: towers.length,
+      ytdBilling: customers.reduce((a, c) => a + c.ytdBilling, 0),
+      fyForecast: customers.reduce((a, c) => a + c.fyForecast, 0),
+      outstanding: snapshots.reduce((a, s) => a + s.billing.outstanding, 0),
+      sla: weighted(customers.map((c) => ({ value: c.sla, weight: c.fyForecast }))),
+      slaTarget: weighted(customers.map((c) => ({ value: c.slaTarget, weight: c.fyForecast }))),
+      csat: weighted(customers.map((c) => ({ value: c.csat, weight: c.fyForecast }))),
+      openIssues: openIssues.length,
+      criticalIssues: openIssues.filter((i) => i.priority === "critical").length,
+      breachedIssues: openIssues.filter((i) => i.breached).length,
+      unansweredFeedback: feedback.filter((f) => !f.responded).length,
+    },
+  };
+
+  if (estateCache.size >= 12) {
+    const oldest = estateCache.keys().next().value;
+    if (oldest) estateCache.delete(oldest);
+  }
+  estateCache.set(key, summary);
+  return summary;
 }
 
 /* ------------------------------------------------------------------ */

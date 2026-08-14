@@ -481,6 +481,30 @@ export const USERS: PortalUser[] = [
     demoPassword: DEMO_PASSWORD,
     demoNote: "Service-scoped access · Indirect and Direct Tax only",
   },
+
+  /**
+   * The other side of the contract. The SSC account is authorised on every
+   * entity because it delivers to every entity — and it lands in the
+   * delivery console, which reads the estate the other way round: one tower
+   * across many customers, and one queue holding every open issue.
+   *
+   * There is one SSC account, and it sees everything. Narrower SSC roles
+   * (a tower lead who should see F&A but not payroll) are supported by the
+   * same `restrictedServices` mechanism the service-scoped customer
+   * accounts above use — add the account here when that is wanted.
+   */
+  {
+    id: "u-ssc-head",
+    name: "Meera Nair",
+    email: "head@gmrssc.demo",
+    role: "SSC Head",
+    title: "Head — Shared Service Centre",
+    initials: "MN",
+    kind: "ssc",
+    entityIds: ENTITIES.map((e) => e.id),
+    demoPassword: DEMO_PASSWORD,
+    demoNote: "Delivery console · every customer, every tower, every issue",
+  },
 ];
 
 /* ------------------------------------------------------------------ */
